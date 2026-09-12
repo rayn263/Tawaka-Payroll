@@ -1,0 +1,81 @@
+/* Design tokens. A single palette so screens read as one product, not a pile of forms. */
+:root {
+    --ink: #10151c;
+    --ink-muted: #5a6472;
+    --line: #dfe4ea;
+    --surface: #ffffff;
+    --canvas: #f5f7fa;
+    --brand: #14532d;
+    --brand-soft: #e8f1ec;
+    --verified: #157347;
+    --supported: #9a6700;
+    --unverified: #b42318;
+    --disabled: #6b7280;
+    --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--canvas);
+}
+
+.app { display: flex; min-height: 100vh; }
+
+.sidebar {
+    width: 240px;
+    flex: 0 0 240px;
+    background: var(--brand);
+    color: #fff;
+    padding: 20px 0;
+}
+
+.sidebar h1 { font-size: 16px; margin: 0 20px 24px; letter-spacing: .02em; }
+.sidebar nav a {
+    display: block;
+    padding: 9px 20px;
+    color: #cfe3d7;
+    text-decoration: none;
+}
+.sidebar nav a.active, .sidebar nav a:hover { background: rgba(255,255,255,.10); color: #fff; }
+
+.content { flex: 1; padding: 24px 32px; min-width: 0; }
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge.verified { background: #e7f4ec; color: var(--verified); }
+.badge.supported { background: #fdf3d8; color: var(--supported); }
+.badge.unverified { background: #fdeceb; color: var(--unverified); }
+.badge.disabled { background: #eef0f2; color: var(--disabled); }
+
+.blocked {
+    border-left: 4px solid var(--unverified);
+    background: #fdeceb;
+    padding: 16px 20px;
+    border-radius: var(--radius);
+}
+.blocked h2 { margin: 0 0 6px; font-size: 15px; color: var(--unverified); }
+
+#blazor-error-ui { display: none; }

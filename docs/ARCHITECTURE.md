@@ -161,7 +161,7 @@ Tawaka-Payroll/
 │   │   ├── Seeding/                   # Reference data + statutory rule seed (dated, sourced)
 │   │   ├── Documents/                 # PDF, Excel, CSV
 │   │   └── Backup/
-│   ├── Tawaka.Ui.Desktop/
+│   ├── Tawaka.Ui.Desktop/             # net8.0-windows — excluded from the core solution
 │   │   ├── App.xaml / MainWindow.xaml # WPF shell hosting BlazorWebView
 │   │   ├── Components/
 │   │   │   ├── Layout/                # Sidebar, topbar, breadcrumbs
@@ -169,11 +169,13 @@ Tawaka-Payroll/
 │   │   │   ├── Pages/                 # One folder per navigation node (§4)
 │   │   │   └── Payslip/               # Payslip Razor template (screen + print + PDF)
 │   │   └── wwwroot/                   # CSS design tokens, fonts, logo assets
-│   └── Tawaka.Reporting/              # Report definitions and renderers
+│   └── Tawaka.Reporting/              # Report definitions and renderers [not yet created]
+├── tools/
+│   └── Tawaka.Foundation.Cli/         # Cross-platform foundation check (migrate, seed, gate)
 └── tests/
-    ├── Tawaka.Payroll.Engine.Tests/   # Golden cases — the most important test project
-    ├── Tawaka.Application.Tests/
-    └── Tawaka.Infrastructure.Tests/   # Migration, audit and lock enforcement tests
+    ├── Tawaka.Domain.Tests/           # Money, currency, dates, conversion provenance
+    ├── Tawaka.Payroll.Engine.Tests/   # Rule resolution, gate, tracing, 34-case catalogue
+    └── Tawaka.Infrastructure.Tests/   # Migration, seeding, audit and lock enforcement
 ```
 
 ### 2.4 Naming stability contract
@@ -539,10 +541,17 @@ company setting, and disabling it is itself an audited event.
 ## 10. Feature status
 
 ### Completed
-- Nothing. This repository contains documentation only.
+**Milestone 1 — Foundation** (2026-09-12): nine-project solution; `Money`, `CurrencyCode`,
+`DateRange` value objects; currency and exchange-rate model with full conversion provenance;
+versioned statutory rule model with verification metadata and source references; EF Core context,
+configurations and the `InitialFoundation` migration (16 tables, SQLite, scaled-integer money);
+audit interceptor; period-lock interceptor with authorised override; statutory rule resolver with
+no-substitution guarantee; live payroll gate; calculation-trace infrastructure; statutory seed data
+graded honestly; DI composition root; WPF/Blazor desktop shell scaffold (Windows-only, uncompiled);
+cross-platform foundation CLI; 91 passing tests. See `PROJECT_STATE.md`.
 
 ### In progress
-- Architecture and compliance research (this document set), awaiting approval.
+- Nothing. Milestone 1 is complete and awaiting approval before Milestone 2 begins.
 
 ### Pending — Phase 1
 Company setup · employee management · employment types · salary setup · payroll periods ·
@@ -557,14 +566,13 @@ full audit log UI · granular permissions.
 Accounting/journal export · advanced reporting · bank payment files · multi-company · cloud
 backup · advanced statutory returns.
 
-### Known bugs
-- None (no code yet).
+### Known bugs and limitations
+See `PROJECT_STATE.md` §6. The significant one: the desktop shell targets `net8.0-windows` and has
+never been compiled, because the build environment is Linux. Its C#, XAML and Razor are written but
+unverified.
 
 ### Next development step
-Architecture approved in principle (2026-09-12). Compliance research delivered as
-`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`, which is now the authoritative specification for the
-calculation engine and adds ADR-012 (verification gate), ADR-013 (official period tables only) and
-ADR-014 (no legal employment determinations). Awaiting approval of that specification, then
-implement Phase 0/1 Milestone 1: solution skeleton, `Money`/`CurrencyCode` value
+Milestone 1 complete and pushed; awaiting approval. Next is **Milestone 2 — company, employees and
+contract versioning**, detailed in `PROJECT_STATE.md` §8. Not started: solution skeleton, `Money`/`CurrencyCode` value
 objects, EF Core context with audit and lock interceptors, and the statutory rule tables with
 seed data and verification metadata.

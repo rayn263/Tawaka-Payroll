@@ -2,10 +2,22 @@
 
 A professional, Windows-based payroll management system for businesses operating in Zimbabwe.
 
-> **Status: ARCHITECTURE PROPOSAL — NOT YET APPROVED. NO APPLICATION CODE HAS BEEN WRITTEN.**
-> This repository currently contains design documentation only. Development begins after the
-> architecture in `docs/ARCHITECTURE.md` is approved and the open questions in
-> `docs/OPEN_QUESTIONS.md` are answered.
+> **Status: Milestone 1 (Foundation) complete — awaiting approval.**
+> The solution skeleton, domain model, database, statutory rule infrastructure, audit trail,
+> period locking and test suite are in place. There is no payroll calculation engine yet, and
+> **no live payroll can be produced**: every seeded statutory rule is unverified and the live
+> payroll gate blocks it. See `PROJECT_STATE.md`.
+
+## Quick start
+
+```bash
+apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
+./build.sh                          # build the cross-platform solution
+./test.sh                           # 91 passing, 31 skipped (pending milestones)
+./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
+```
+
+The Windows desktop shell builds from `Tawaka.Payroll.sln` on Windows only.
 
 ## What this is
 
@@ -39,6 +51,8 @@ It is built around four non-negotiable principles:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technology stack, application architecture, navigation, calculation pipeline, payslip design, security model, file structure, feature status |
 | [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Full relational schema, entity relationships, money and currency representation |
 | [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, verification status, per-rule confidence, compliance risks |
+| [`PROJECT_STATE.md`](PROJECT_STATE.md) | **Where the project actually is**: phase, milestone, architecture as built, database version, rules implemented and verified, known issues, next milestone |
+| [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision record (ADR) log |
 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business before or during development |

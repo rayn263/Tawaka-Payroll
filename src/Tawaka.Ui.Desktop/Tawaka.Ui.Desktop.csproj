@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    The desktop shell: a WPF host with a BlazorWebView, so screens are Razor components that can
+    later be served unchanged by ASP.NET Core (ADR-001).
+
+    This project targets net8.0-windows and therefore builds only on Windows. The cross-platform
+    solution (Tawaka.Payroll.Core.sln) deliberately excludes it so that the domain, engine,
+    application, infrastructure and all tests build and run on any platform.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Tawaka.Ui.Desktop</RootNamespace>
+    <AssemblyName>Tawaka.Payroll</AssemblyName>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.100" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tawaka.Domain\Tawaka.Domain.csproj" />
+    <ProjectReference Include="..\Tawaka.Application\Tawaka.Application.csproj" />
+    <ProjectReference Include="..\Tawaka.Payroll.Engine\Tawaka.Payroll.Engine.csproj" />
+    <ProjectReference Include="..\Tawaka.Infrastructure\Tawaka.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+@namespace Tawaka.Ui.Desktop.Components
+
+<Router AppAssembly="@typeof(Main).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <div class="card">
+                <h2>Page not found</h2>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

@@ -120,3 +120,40 @@ the rolling four-month engagement window and warns before the threshold, but nev
 employment type, leave accrual or NSSA treatment by itself.
 **Consequences:** The business is told what it needs to know; the legal determination stays with
 people who can make it.
+
+### ADR-015 — Two solution files, so the cross-platform core always builds
+**Status:** Accepted (Milestone 1)
+**Context:** The desktop shell targets `net8.0-windows` and cannot build on Linux, but the domain,
+engine, application, infrastructure and all tests can and should.
+**Decision:** `Tawaka.Payroll.Core.sln` contains everything except the desktop shell and is what
+`build.sh` and `test.sh` use. `Tawaka.Payroll.sln` adds the desktop shell for Windows work.
+**Consequences:** CI and non-Windows contributors get a green build and a full test run. The
+desktop project must be added to the Windows solution by hand if recreated, because
+`dotnet sln add` refuses it where the WindowsDesktop SDK is absent.
+
+### ADR-016 — xUnit assertions only; no FluentAssertions
+**Status:** Accepted (Milestone 1)
+**Context:** FluentAssertions changed licence at version 8: commercial use now requires a paid
+licence. This is a commercial payroll product.
+**Decision:** Use the assertions built into xUnit. No assertion library dependency.
+**Consequences:** Slightly more verbose assertions, and no licensing exposure. Same reasoning as
+the QuestPDF note in ADR-009 — check the licence before the dependency, not after.
+
+### ADR-017 — Statutory rules use table-per-type mapping
+**Status:** Accepted (Milestone 1)
+**Context:** The documented schema names a separate table per rule kind, but all rules share
+identity, effective dating, verification metadata and source provenance.
+**Decision:** `StatutoryRule` is mapped table-per-type: shared columns in `StatutoryRules`, each
+rule kind in its own table (`TaxRules`, `NssaRules`, …), preserving the documented names.
+**Consequences:** Shared behaviour lives in one place and the documented table names hold. Reads
+join across two tables, which is immaterial at this data volume.
+
+### ADR-018 — Verification is not the only gate: incomplete configuration blocks too
+**Status:** Accepted (Milestone 1)
+**Context:** A rule can be correct in its values yet unusable. A verified NSSA ceiling with no rule
+for applying it to weekly payroll (Q22) is one; an aggregate multi-currency strategy without
+advisor sign-off (Q1) is another.
+**Decision:** The resolver returns `IncompleteConfiguration` for such rules, naming the specific
+compliance question, even when the rule is marked Verified.
+**Consequences:** Verification cannot be used to wave through a rule whose application method is
+still unknown.
