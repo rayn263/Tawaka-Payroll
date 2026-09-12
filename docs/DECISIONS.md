@@ -84,3 +84,39 @@ Phase 3.
 Additive change is always preferred to renaming.
 **Consequences:** Two AI assistants and a human can work on this codebase without silently
 breaking each other.
+
+### ADR-012 — Verification gate: unverified statutory rules cannot run live payroll
+**Status:** Proposed
+**Context:** Every Zimbabwean official domain (ZIMRA, NSSA, RBZ, Treasury, Parliament, ZIMDEF,
+Veritas, ZimLII) returns HTTP 403 from this environment's egress policy, so no statutory rule could
+be confirmed against its primary source. Research was possible only through search-index snippets.
+**Decision:** Four confidence grades (🟢 VERIFIED / 🟡+ SUPPORTED-official-text / 🟡 SUPPORTED-
+professional-consensus / 🔴 UNVERIFIED) are stored on every rule row. The engine runs in LIVE mode
+only on 🟢 rules; anything lower raises a blocking error naming the rule and its remedy. TEST mode
+permits lower grades but watermarks every output `TEST — NOT FOR STATUTORY USE`, creates no
+statutory obligations, and cannot finalise or lock a run.
+**Consequences:** The system cannot produce a live payroll until the verification checklist in
+`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 is worked through. That is intentional: a payroll
+system that silently computes on unverified rates is worse than one that refuses.
+
+### ADR-013 — Official period tables only; no derived tax tables
+**Status:** Proposed
+**Context:** ZIMRA publishes daily, weekly, fortnightly, monthly and annual tables for both
+currencies, in `gross × rate − fixed deduction` form.
+**Decision:** `TaxRules.PeriodBasis` selects strictly on the employee's payment frequency, and
+`TaxBrackets.FixedDeductionAmount` stores the official "less" column. The engine never derives a
+period table from another (no monthly ÷ 4 or ÷ 4.33, no monthly ÷ 2 for fortnightly). A missing
+table is a blocking error.
+**Consequences:** Results reconcile line-for-line with ZIMRA's own tables. Weekly payroll cannot
+run until the weekly table is loaded — correct, given site staff are commonly weekly-paid.
+
+### ADR-014 — The system never makes a legal employment determination
+**Status:** Proposed
+**Context:** Labour Act s.12(3) deems a casual worker to be on a contract without limit of time
+once engagement exceeds six weeks in any four consecutive months. The deeming operates by law,
+regardless of the contract label or what the payroll system records.
+**Decision:** `EmploymentType` is an administrative payroll classification only. The engine tracks
+the rolling four-month engagement window and warns before the threshold, but never changes the
+employment type, leave accrual or NSSA treatment by itself.
+**Consequences:** The business is told what it needs to know; the legal determination stays with
+people who can make it.

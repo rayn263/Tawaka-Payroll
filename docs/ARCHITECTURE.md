@@ -561,7 +561,10 @@ backup · advanced statutory returns.
 - None (no code yet).
 
 ### Next development step
-Obtain approval of this architecture, then resolve the blocking items in `OPEN_QUESTIONS.md`
-(Q1–Q4), then implement Phase 1 Milestone 1: solution skeleton, `Money`/`CurrencyCode` value
+Architecture approved in principle (2026-09-12). Compliance research delivered as
+`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`, which is now the authoritative specification for the
+calculation engine and adds ADR-012 (verification gate), ADR-013 (official period tables only) and
+ADR-014 (no legal employment determinations). Awaiting approval of that specification, then
+implement Phase 0/1 Milestone 1: solution skeleton, `Money`/`CurrencyCode` value
 objects, EF Core context with audit and lock interceptors, and the statutory rule tables with
 seed data and verification metadata.

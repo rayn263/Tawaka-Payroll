@@ -35,12 +35,20 @@ It is built around four non-negotiable principles:
 
 | Document | Contents |
 |---|---|
+| [`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`](ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md) | **Authoritative specification for the payroll calculation engine.** Statutory rules with per-rule confidence grades, dual-currency methodology, 34 test cases, verification checklist, blocking decision register |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technology stack, application architecture, navigation, calculation pipeline, payslip design, security model, file structure, feature status |
 | [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Full relational schema, entity relationships, money and currency representation |
 | [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, verification status, per-rule confidence, compliance risks |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision record (ADR) log |
 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business before or during development |
+
+## Verification gate
+
+The payroll engine runs in LIVE mode only on rules graded 🟢 VERIFIED. **No rule currently holds
+that grade**, because every Zimbabwean official domain is blocked by this environment's network
+egress policy and no primary source could be read. Clearing the gate is a documented, finite task:
+see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 — ten documents, roughly one working day.
 
 ## Important compliance notice
 

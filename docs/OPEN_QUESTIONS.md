@@ -1,6 +1,6 @@
 # Open Questions — decisions required
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-12 (revised after compliance research — see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`)
 
 `BLOCKING` items must be answered before the affected code is written. `NON-BLOCKING` items have a
 sensible default recorded and can be changed later in Settings without rework.
@@ -11,6 +11,11 @@ sensible default recorded and can be changed later in Settings without rework.
 
 | # | Question | Status | Default if unanswered |
 |---|---|---|---|
+> **Status update.** Q1–Q6 were researched in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`. Q2 and Q3
+> are resolved in substance, Q5 largely so, Q4 partly. Q1 advanced but remains open. Q6 is
+> externally dependent on NSSA. Eight new blocking questions (Q21–Q28) were discovered and are
+> listed at the end of this file. The authoritative status register is §25 of the spec.
+
 | **Q1** | **Multi-currency PAYE:** for an employee paid in both USD and ZiG, is ZiG converted and aggregated into the USD table (position A), or is each currency taxed on its own table (position B)? Sources conflict, and the difference is material. Which exchange rate (interbank/official/RBZ) and as at which date? | **BLOCKING** for mixed-currency payroll | Aggregate in USD, tax once, apportion pro rata for remittance; flagged `Unverified`, blocked from live use |
 | **Q2** | **AIDS Levy base:** 3% of tax *before* or *after* tax credits? | BLOCKING for credit-entitled employees | After credits; configurable |
 | **Q3** | **Weekly/fortnightly PAYE:** does ZIMRA publish weekly/fortnightly tables, or is an annual-equivalent method used? How is the NSSA ceiling apportioned for a weekly-paid employee? | **BLOCKING** for weekly payroll | Per-period table where available; ceiling pro-rated by period length |
@@ -45,3 +50,21 @@ rule rows and set their `VerificationStatus`.
 | # | Answer | Given by | Date |
 |---|---|---|---|
 | | | | |
+
+
+---
+
+## New blocking questions discovered during compliance research (Q21–Q28)
+
+Full detail and reasoning in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25.2.
+
+| # | Question | Impact | Status |
+|---|---|---|---|
+| **Q21** | Is Final Deduction System cumulative reconciliation mandatory for this employer, and how are mid-year joiners/leavers handled? | HIGH | OPEN |
+| **Q22** | How is the monthly NSSA ceiling applied to weekly and fortnightly payroll? Three plausible methods differ roughly fourfold. | HIGH | OPEN |
+| **Q23** | Construction NEC (NECCIZ) levy rates, base, employer/employee split and minimum wage grades — SI 112 of 2021 and later CBAs | HIGH (if construction) | OPEN |
+| **Q24** | Medical aid credit: 50% or 100% of contributions? Two professional sources conflict directly. | MEDIUM | OPEN |
+| **Q25** | Monthly PAYE return — P2 or REV5 on TaRMS? | MEDIUM | OPEN |
+| **Q26** | **PAYE fixed-deduction ("less") column values** for every band, both currencies, every period basis | **CRITICAL** | OPEN |
+| **Q27** | Employer loan benefit benchmark — SOFR or LIBOR? | LOW | OPEN |
+| **Q28** | Does the bonus exemption apply to any bonus, or only an annual/13th-cheque bonus? | MEDIUM | OPEN |
