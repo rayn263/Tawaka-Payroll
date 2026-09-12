@@ -1,0 +1,152 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/employees"
+@inject EmployeeService Employees
+@inject PayrollDbContext Db
+@inject UserSession Session
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <h1>Employees</h1>
+    @if (Session.HasPermission(Permissions.EmployeesEdit))
+    {
+        <a class="btn btn-primary" href="employees/new">Add employee</a>
+    }
+</div>
+
+<div class="card filters">
+    <input class="search" placeholder="Search name, employee number or national ID"
+           @bind="_filter" @bind:event="oninput" @onkeyup="ReloadAsync" />
+
+    <select @bind="_status" @bind:after="ReloadAsync">
+        <option value="">All statuses</option>
+        @foreach (var status in Enum.GetValues<EmployeeStatus>())
+        {
+            <option value="@status">@status</option>
+        }
+    </select>
+
+    <select @bind="_departmentId" @bind:after="ReloadAsync">
+        <option value="">All departments</option>
+        @foreach (var department in _departments)
+        {
+            <option value="@department.Id">@department.Name</option>
+        }
+    </select>
+
+    <select @bind="_employmentTypeId" @bind:after="ReloadAsync">
+        <option value="">All employment types</option>
+        @foreach (var type in _employmentTypes)
+        {
+            <option value="@type.Id">@type.Name</option>
+        }
+    </select>
+
+    <select @bind="_currency" @bind:after="ReloadAsync">
+        <option value="">All currencies</option>
+        <option value="USD">USD</option>
+        <option value="ZWG">ZiG</option>
+    </select>
+</div>
+
+<div class="card">
+    @if (_rows.Count == 0)
+    {
+        <EmptyState Title="No employees match"
+                    Description="Adjust the filters, or add your first employee." />
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+            <tr>
+                <th><SortHeader Column="number" Current="@_sort" OnSort="Sort">Number</SortHeader></th>
+                <th><SortHeader Column="name" Current="@_sort" OnSort="Sort">Name</SortHeader></th>
+                <th>Job title</th>
+                <th>Department</th>
+                <th>Employment type</th>
+                <th>Currency</th>
+                <th><SortHeader Column="hired" Current="@_sort" OnSort="Sort">Engaged</SortHeader></th>
+                <th>Contract ends</th>
+                <th>Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in Sorted())
+            {
+                <tr class="clickable" @onclick="() => Open(row.Id)">
+                    <td>@row.EmployeeNumber</td>
+                    <td class="strong">@row.FullName</td>
+                    <td>@(row.JobTitle ?? "—")</td>
+                    <td>@(row.Department ?? "—")</td>
+                    <td>@(row.EmploymentType ?? "—")</td>
+                    <td>@(row.PayrollCurrency == "ZWG" ? "ZiG" : row.PayrollCurrency ?? "—")</td>
+                    <td>@row.HireDate.ToString("dd MMM yyyy")</td>
+                    <td>@(row.ContractEndDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                    <td><StatusBadge Employee="row.Status" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">@_rows.Count employees</p>
+    }
+</div>
+
+@code {
+    private List<EmployeeListItem> _rows = new();
+    private List<Department> _departments = new();
+    private List<EmploymentType> _employmentTypes = new();
+
+    private string _filter = string.Empty;
+    private string _status = string.Empty;
+    private string _departmentId = string.Empty;
+    private string _employmentTypeId = string.Empty;
+    private string _currency = string.Empty;
+    private string _sort = "name";
+    private bool _descending;
+    private Guid _companyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _departments = Db.Departments.AsNoTracking()
+            .Where(d => d.CompanyId == _companyId && d.IsActive).OrderBy(d => d.Name).ToList();
+        _employmentTypes = Db.EmploymentTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _companyId && t.IsActive)
+            .OrderBy(t => t.DisplayOrder).ToList();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        var filter = new EmployeeFilter
+        {
+            SearchTerm = string.IsNullOrWhiteSpace(_filter) ? null : _filter,
+            Status = Enum.TryParse<EmployeeStatus>(_status, out var status) ? status : null,
+            DepartmentId = Guid.TryParse(_departmentId, out var department) ? department : null,
+            EmploymentTypeId = Guid.TryParse(_employmentTypeId, out var type) ? type : null,
+            PayrollCurrency = string.IsNullOrWhiteSpace(_currency) ? null : _currency
+        };
+
+        _rows = (await Employees.SearchAsync(_companyId, filter)).ToList();
+    }
+
+    private void Sort(string column)
+    {
+        _descending = _sort == column && !_descending;
+        _sort = column;
+    }
+
+    private IEnumerable<EmployeeListItem> Sorted()
+    {
+        IEnumerable<EmployeeListItem> ordered = _sort switch
+        {
+            "number" => _rows.OrderBy(r => r.EmployeeNumber),
+            "hired" => _rows.OrderBy(r => r.HireDate),
+            _ => _rows.OrderBy(r => r.FullName)
+        };
+
+        return _descending ? ordered.Reverse() : ordered;
+    }
+
+    private void Open(Guid id) => Nav.NavigateTo($"employees/{id}");
+}

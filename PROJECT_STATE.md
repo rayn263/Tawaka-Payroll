@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-09-12
 **Current phase:** Phase 0 / Phase 1 foundation
-**Current milestone:** Milestone 1 — Foundation — **COMPLETE, awaiting approval**
+**Current milestone:** Milestone 2 — Company, employees and security — **COMPLETE, awaiting approval**
 **Payroll mode:** DEVELOPMENT (live payroll is gated and currently blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
@@ -31,35 +31,48 @@ document — ten documents, roughly one working day.
 
 ## 2. Architecture as built
 
-Clean architecture, dependencies inward only. Nine projects:
+Clean architecture, dependencies inward only. Eleven projects:
 
 | Project | Purpose | Builds on Linux |
 |---|---|---|
-| `src/Tawaka.Domain` | Entities and value objects: `Money`, `CurrencyCode`, `DateRange`, currencies, statutory rules, audit, payroll period | yes |
+| `src/Tawaka.Domain` | Entities and value objects: `Money`, `CurrencyCode`, `DateRange`, currencies, statutory rules, audit, company, organisation, employees, earnings, security | yes |
 | `src/Tawaka.Payroll.Engine` | Calculation tracing and currency conversion records. **No calculations yet** | yes |
-| `src/Tawaka.Application` | Abstractions (`IClock`, `ICurrentUser`, `IStatutoryRuleSource`), rule resolution, live payroll gate | yes |
+| `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services | yes |
 | `src/Tawaka.Infrastructure` | EF Core context, configurations, migrations, interceptors, seeding, DI | yes |
-| `src/Tawaka.Ui.Desktop` | WPF shell hosting Blazor components (`net8.0-windows`) | **no — Windows only** |
+| `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — layout, login, dashboard, employees, profile, projects, statutory, settings | yes |
+| `src/Tawaka.Ui.Desktop` | WPF host only: window, `BlazorWebView`, startup wiring (`net8.0-windows`) | **no — Windows only** |
 | `tools/Tawaka.Foundation.Cli` | Cross-platform foundation check: migrate, seed, print rule register, run the gate | yes |
 | `tests/Tawaka.Domain.Tests` | Money, currency, date range, conversion provenance | yes |
+| `tests/Tawaka.Application.Tests` | Password hashing and policy, employee/contract/payment validation | yes |
 | `tests/Tawaka.Payroll.Engine.Tests` | Rule resolution, live gate, tracing, the 34-case compliance catalogue | yes |
-| `tests/Tawaka.Infrastructure.Tests` | Migration, seeding, audit trail, period locking | yes |
+| `tests/Tawaka.Infrastructure.Tests` | Migration, seeding, audit, locking, security, employee lifecycle, contract versioning | yes |
 
 Two solution files: `Tawaka.Payroll.Core.sln` (cross-platform, used by `build.sh` and `test.sh`)
-and `Tawaka.Payroll.sln` (adds the Windows desktop shell).
+and `Tawaka.Payroll.sln` (adds the Windows desktop host).
 
 ## 3. Database
 
 | | |
 |---|---|
 | Provider | SQLite |
-| Migration | `20260912221408_InitialFoundation` |
-| Tables | 16 |
+| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity` |
+| Tables | 44 |
 
-`AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
+Milestone 1 (16): `AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
 `CurrencyTaxStrategyRules`, `EmployerLevyRules`, `ExchangeRates`, `NssaEligibilityRules`,
 `NssaRules`, `PayrollPeriods`, `StatutoryRules`, `TaxBrackets`, `TaxCreditRules`,
 `TaxExemptionRules`, `TaxRules`.
+
+Milestone 2 (28): `Companies`, `CompanyCurrencies`, `CompanyBankAccounts`, `Departments`,
+`JobTitles`, `Locations`, `Clients`, `Projects`, `ProjectSites`, `EmploymentTypes`, `Employees`,
+`EmployeeContracts`, `EmployeeStatutoryProfiles`, `EmployeePaymentAccounts`,
+`EmployeeProjectAssignments`, `EmployeeStatusHistory`, `EmployeeNextOfKin`, `EmployeeDocuments`,
+`EarningTypes`, `DeductionTypes`, `EmployeeRecurringEarnings`, `EmployeeRecurringDeductions`,
+`Users`, `Roles`, `Permissions`, `RolePermissions`, `UserRoles`, `LoginAttempts`.
+
+**Company-ready:** every company-scoped table carries `CompanyId`, and `StatutoryRule` carries a
+nullable `CompanyId` so employer-specific rules (APWCS, NEC) can coexist with national ones. The
+first release operates with exactly one company and no multi-company user interface.
 
 Statutory rules use **table-per-type** mapping: shared identity, dating and verification metadata
 in `StatutoryRules`, each rule kind in its own table. All monetary values and rates persist as
@@ -89,31 +102,37 @@ Rule *infrastructure* is complete; no statutory *calculation* exists yet, by des
 | Project | Passing | Skipped |
 |---|---|---|
 | Domain | 29 | 0 |
+| Application | 43 | 0 |
 | Payroll.Engine | 31 | 31 |
-| Infrastructure | 31 | 0 |
-| **Total** | **91** | **31** |
+| Infrastructure | 92 | 0 |
+| **Total** | **195** | **31** |
 
 The 31 skipped are compliance cases that need later milestones; they are present and counted
 rather than omitted. See `TESTING.md`.
 
 ## 6. Known issues and limitations
 
-1. **The desktop shell has never been compiled.** It targets `net8.0-windows`; this build
-   environment is Linux and the WindowsDesktop SDK is unavailable. The C#, XAML and Razor are
-   written but unverified. First Windows build may need fixes — treat it as untested code.
-2. **`Microsoft.AspNetCore.Components.WebView.Wpf` version 8.0.100 is unpinned by testing.** It
-   could not be restored here; confirm the current 8.x version on Windows.
-3. **No authentication yet.** `ICurrentUser` resolves to `SystemUser`, which reports
-   `SYSTEM (unauthenticated)` in the audit trail — deliberately conspicuous. Real users and
-   permissions arrive in Milestone 2.
-4. **No employee or payroll transaction model yet.** `PayrollPeriod` exists only as the lockable
-   scope the interceptor enforces against.
-5. **`Money` is not yet persisted.** Rule amounts carry currency at rule level, so the converter
-   infrastructure is in place and tested but the `Money` column mapping lands with payroll
-   transactions in Milestone 2.
+1. **The Razor screens compile but have not been run.** All UI code now builds and is
+   type-checked on every build (ADR-019), which is a real improvement on Milestone 1, but no
+   screen has been rendered or clicked. Behaviour — data binding, navigation, form round-trips —
+   is unverified until it runs on Windows. Component tests are proposed for Milestone 3.
+2. **The WPF host is still Windows-only and uncompiled here**, as is
+   `Microsoft.AspNetCore.Components.WebView.Wpf` 8.0.100. The host is now thin — a window, a
+   WebView and startup wiring — so the surface that could break is small, but confirm the package
+   version on the first Windows build.
+3. **`Money` is still not persisted as a column pair.** Contract rates and recurring amounts store
+   a decimal plus a currency code on the same row, which is equivalent but not the `Money` value
+   object. The mapping lands with payroll transactions in Milestone 3.
+4. **Employee documents have no upload flow.** The entity, table and profile tab exist; attaching
+   a file is a Milestone 5 task.
+5. **Recurring earnings and deductions have no editing screen yet.** They are modelled, persisted,
+   validated and shown on the employee profile, but are captured programmatically until the
+   payroll engine gives them a purpose (Milestone 3).
 6. **The lock interceptor keys on a `Status` property** named `Locked`. When payroll transaction
    entities arrive they must be scoped to their period explicitly; that generalisation is
    Milestone 4 work and is noted in the interceptor.
+7. **`NationalId` format checking is opt-in and currently off.** District codes and check letters
+   vary, and rejecting a genuine identity number is worse than accepting an unusual one.
 
 ## 7. Blocking questions
 
@@ -123,10 +142,13 @@ Full register in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25; summary in
 
 ## 8. Next milestone
 
-**Milestone 2 — Company, employees and contract versioning.** Not started; awaiting approval.
+**Milestone 3 — Payroll periods and the calculation engine.** Not started; awaiting approval.
 
-Planned: company profile and settings; departments, job titles, locations, projects and sites;
-employee master with the profile tabs; **effective-dated `EmployeeContracts`** so a salary change
-never overwrites history; employee statutory profile; bank and mobile-money accounts; recurring
-earnings and deductions; users, roles and granular permissions with segregation of duties;
-authentication replacing `SystemUser`.
+Planned: payroll calendars and periods (monthly, weekly, fortnightly, custom); the
+`PayrollInputSnapshot` assembled from employee, contract, recurring earnings and deductions;
+the ordered calculation pipeline consuming resolved statutory rules; `Money` persisted as a
+column pair on payroll transaction lines; the calculation trace written per figure; and the
+remaining compliance test cases turned on as the engine makes them executable.
+
+Live payroll stays blocked throughout: the engine will calculate in development mode only until
+the verification checklist is cleared.

@@ -1,0 +1,482 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/settings"
+@inject PayrollDbContext Db
+@inject UserSession Session
+
+<h1>Settings</h1>
+
+<div class="tabs">
+    @foreach (var tab in Tabs)
+    {
+        <button class="tab @(tab == _tab ? "active" : null)" @onclick="() => _tab = tab">@tab</button>
+    }
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+@if (_saved)
+{
+    <div class="alert alert-success">Saved.</div>
+}
+
+@if (_company is null)
+{
+    <div class="card"><EmptyState Title="No company record" /></div>
+}
+else if (_tab == "Company profile")
+{
+    <div class="card">
+        <h2>Identity</h2>
+        <div class="form-grid">
+            <div><label>Legal name *</label><input @bind="_company.LegalName" /></div>
+            <div><label>Trading name</label><input @bind="_company.TradingName" /></div>
+            <div><label>Registration number</label><input @bind="_company.RegistrationNumber" /></div>
+            <div><label>Phone</label><input @bind="_company.Phone" /></div>
+            <div><label>Email</label><input @bind="_company.Email" /></div>
+            <div><label>Address</label><input @bind="_company.AddressLine1" /></div>
+            <div><label>City</label><input @bind="_company.City" /></div>
+            <div><label>Logo file path</label><input @bind="_company.LogoPath" /></div>
+        </div>
+        <p class="muted">
+            The trading name appears on payslips where set. Bank accounts are named separately —
+            an account is often held in a style that matches neither name.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>Statutory identifiers</h2>
+        <div class="form-grid">
+            <div><label>ZIMRA tax / BP number</label><input @bind="_company.TaxNumber" /></div>
+            <div><label>PAYE reference</label><input @bind="_company.PayeReference" /></div>
+            <div><label>NSSA employer number</label><input @bind="_company.NssaEmployerNumber" /></div>
+            <div><label>ZIMDEF number</label><input @bind="_company.ZimdefNumber" /></div>
+            <div><label>SDF number</label><input @bind="_company.StandardsDevelopmentFundNumber" /></div>
+            <div><label>NEC code</label><input @bind="_company.NecCode" /></div>
+            <div><label>NEC membership number</label><input @bind="_company.NecMembershipNumber" /></div>
+            <div><label>Industry classification</label><input @bind="_company.IndustryClassification" /></div>
+            <div><label>APWCS industry code</label><input @bind="_company.ApwcsIndustryCode" /></div>
+        </div>
+        <p class="muted">
+            The APWCS industry code and its assessed rate are issued by NSSA following the annual
+            WC50 assessment. The system will not estimate a rate.
+        </p>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SaveCompanyAsync"
+                    disabled="@(!Session.HasPermission(Permissions.CompanyEdit))">
+                Save company profile
+            </button>
+        </div>
+    </div>
+}
+else if (_tab == "Currencies")
+{
+    <div class="card">
+        <h2>Payroll currencies</h2>
+        <table class="data">
+            <thead>
+            <tr><th>Code</th><th>Name</th><th>Display as</th><th class="num">Decimals</th>
+                <th>Enabled</th><th>Default payroll</th><th>Default reporting</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var currency in _currencies)
+            {
+                var reference = _referenceCurrencies.FirstOrDefault(c => c.Code == currency.CurrencyCode);
+                <tr>
+                    <td class="mono">@currency.CurrencyCode</td>
+                    <td>@(reference?.Name ?? "—")</td>
+                    <td>@(currency.DisplayCodeOverride ?? reference?.DisplayCode ?? currency.CurrencyCode)</td>
+                    <td class="num">@(currency.DecimalPlacesOverride ?? reference?.DecimalPlaces ?? 2)</td>
+                    <td><input type="checkbox" @bind="currency.IsEnabled" /></td>
+                    <td><input type="radio" name="defaultPayroll"
+                               checked="@currency.IsDefaultPayrollCurrency"
+                               @onchange="() => SetDefaultPayroll(currency)" /></td>
+                    <td><input type="radio" name="defaultReporting"
+                               checked="@currency.IsDefaultReportingCurrency"
+                               @onchange="() => SetDefaultReporting(currency)" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">
+            The reporting currency controls presentation only. Totals in different currencies are
+            never added together; a consolidated figure always states the rate and date used.
+        </p>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SaveCurrenciesAsync"
+                    disabled="@(!Session.HasPermission(Permissions.CompanyEdit))">
+                Save currencies
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Exchange rates</h2>
+        @if (_rates.Count == 0)
+        {
+            <EmptyState Title="No exchange rates captured"
+                        Description="A rate is required only where an employee is paid in more than one currency, or for consolidated reporting. Rates are never hard-coded." />
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>From</th><th>To</th><th class="num">Rate</th><th>Type</th>
+                    <th>Rate date</th><th>Source</th></tr></thead>
+                <tbody>
+                @foreach (var rate in _rates)
+                {
+                    <tr>
+                        <td>@rate.FromCurrency</td>
+                        <td>@rate.ToCurrency</td>
+                        <td class="num">@rate.Rate.ToString("N4")</td>
+                        <td>@rate.RateType</td>
+                        <td>@rate.RateDate.ToString("dd MMM yyyy")</td>
+                        <td>@rate.Source</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+else if (_tab == "Bank accounts")
+{
+    <div class="card">
+        <h2>Company bank accounts</h2>
+        <p class="muted">
+            A company normally holds separate accounts per currency, and may pay net wages from one
+            account and statutory obligations from another.
+        </p>
+        @if (_bankAccounts.Count == 0)
+        {
+            <EmptyState Title="No bank accounts captured" />
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Account name</th><th>Bank</th><th>Number</th><th>Currency</th>
+                    <th>Purpose</th><th>Default</th><th>Active</th></tr></thead>
+                <tbody>
+                @foreach (var account in _bankAccounts)
+                {
+                    <tr>
+                        <td class="strong">@account.AccountName</td>
+                        <td>@account.BankName</td>
+                        <td class="mono">@account.AccountNumber</td>
+                        <td>@(account.CurrencyCode == "ZWG" ? "ZiG" : account.CurrencyCode)</td>
+                        <td>@account.Purpose</td>
+                        <td>@(account.IsDefaultForPurpose ? "Yes" : "No")</td>
+                        <td>@(account.IsActive ? "Yes" : "No")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    @if (Session.HasPermission(Permissions.CompanyEdit))
+    {
+        <div class="card">
+            <h2>Add bank account</h2>
+            <div class="form-grid">
+                <div><label>Account name *</label><input @bind="_accountName" /></div>
+                <div><label>Bank *</label><input @bind="_bankName" /></div>
+                <div><label>Branch</label><input @bind="_branchName" /></div>
+                <div><label>Account number *</label><input @bind="_accountNumber" /></div>
+                <div>
+                    <label>Currency *</label>
+                    <select @bind="_accountCurrency">
+                        @foreach (var currency in _referenceCurrencies)
+                        {
+                            <option value="@currency.Code">@currency.DisplayCode</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Purpose</label>
+                    <select @bind="_accountPurpose">
+                        @foreach (var purpose in Enum.GetValues<PaymentPurpose>())
+                        {
+                            <option value="@purpose">@purpose</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="AddBankAccountAsync">Add account</button>
+            </div>
+        </div>
+    }
+}
+else if (_tab == "Organisation")
+{
+    <OrganisationSettings />
+}
+else if (_tab == "Earnings & deductions")
+{
+    <div class="card">
+        <h2>Earning types</h2>
+        <p class="muted">
+            Whether an allowance is taxable or NSSA-applicable is configuration, not code — and each
+            treatment carries its own verification grade, exactly like a tax table.
+        </p>
+        <table class="data">
+            <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Taxable</th><th>NSSA</th>
+                <th>In gross</th><th>Treatment</th></tr></thead>
+            <tbody>
+            @foreach (var type in _earningTypes)
+            {
+                <tr>
+                    <td class="mono">@type.Code</td>
+                    <td>@type.Name</td>
+                    <td>@type.Category</td>
+                    <td>@(type.IsTaxable ? "Yes" : "No")</td>
+                    <td>@(type.IsNssaApplicable ? "Yes" : "No")</td>
+                    <td>@(type.IsIncludedInGross ? "Yes" : "No")</td>
+                    <td><StatusBadge Verification="type.TreatmentVerificationStatus" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Deduction types</h2>
+        <table class="data">
+            <thead><tr><th>Code</th><th>Name</th><th>Category</th>
+                <th>Reduces taxable income</th><th>Treatment</th></tr></thead>
+            <tbody>
+            @foreach (var type in _deductionTypes)
+            {
+                <tr>
+                    <td class="mono">@type.Code</td>
+                    <td>@type.Name</td>
+                    <td>@type.Category</td>
+                    <td>@(type.ReducesTaxableIncome ? "Yes" : "No")</td>
+                    <td><StatusBadge Verification="type.TreatmentVerificationStatus" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+else if (_tab == "Users & roles")
+{
+    <div class="card">
+        <h2>Users</h2>
+        <table class="data">
+            <thead><tr><th>Username</th><th>Name</th><th>Roles</th><th>Active</th><th>Last sign-in</th></tr></thead>
+            <tbody>
+            @foreach (var user in _users)
+            {
+                <tr>
+                    <td class="mono">@user.Username</td>
+                    <td>@user.FullName</td>
+                    <td>@string.Join(", ", RoleNamesFor(user))</td>
+                    <td>@(user.IsActive ? "Yes" : "No")</td>
+                    <td>@(user.LastLoginAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Roles and segregation of duties</h2>
+        <table class="data">
+            <thead><tr><th>Role</th><th>Description</th><th class="num">Permissions</th></tr></thead>
+            <tbody>
+            @foreach (var role in _roles)
+            {
+                <tr>
+                    <td class="strong">@role.Name</td>
+                    <td>@role.Description</td>
+                    <td class="num">@_rolePermissionCounts.GetValueOrDefault(role.Id)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">
+            Payroll.Calculate and Payroll.Approve are declared as conflicting permissions, so no
+            single role can both prepare and approve a payroll run.
+        </p>
+    </div>
+}
+
+@code {
+    private static readonly string[] Tabs =
+    {
+        "Company profile", "Currencies", "Bank accounts", "Organisation",
+        "Earnings & deductions", "Users & roles"
+    };
+
+    private string _tab = "Company profile";
+    private ValidationResult? _validation;
+    private bool _saved;
+
+    private Company? _company;
+    private List<CompanyCurrency> _currencies = new();
+    private List<Domain.Currencies.Currency> _referenceCurrencies = new();
+    private List<Domain.Currencies.ExchangeRate> _rates = new();
+    private List<CompanyBankAccount> _bankAccounts = new();
+    private List<EarningType> _earningTypes = new();
+    private List<DeductionType> _deductionTypes = new();
+    private List<User> _users = new();
+    private List<Role> _roles = new();
+    private Dictionary<Guid, int> _rolePermissionCounts = new();
+    private Dictionary<Guid, List<string>> _userRoleNames = new();
+
+    private string _accountName = string.Empty;
+    private string _bankName = string.Empty;
+    private string _branchName = string.Empty;
+    private string _accountNumber = string.Empty;
+    private string _accountCurrency = "USD";
+    private PaymentPurpose _accountPurpose = PaymentPurpose.NetPay;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _company = Db.Companies.FirstOrDefault();
+        if (_company is null)
+        {
+            return;
+        }
+
+        _currencies = Db.CompanyCurrencies.Where(c => c.CompanyId == _company.Id)
+            .OrderBy(c => c.SortOrder).ToList();
+        _referenceCurrencies = Db.Currencies.AsNoTracking().OrderBy(c => c.SortOrder).ToList();
+        _rates = Db.ExchangeRates.AsNoTracking().OrderByDescending(r => r.RateDate).Take(20).ToList();
+        _bankAccounts = Db.CompanyBankAccounts.AsNoTracking()
+            .Where(a => a.CompanyId == _company.Id).OrderBy(a => a.CurrencyCode).ToList();
+        _earningTypes = Db.EarningTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _company.Id).OrderBy(t => t.DisplayOrder).ToList();
+        _deductionTypes = Db.DeductionTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _company.Id).OrderBy(t => t.DisplayOrder).ToList();
+        _users = Db.Users.AsNoTracking().OrderBy(u => u.Username).ToList();
+        _roles = Db.Roles.AsNoTracking().OrderBy(r => r.Name).ToList();
+        _rolePermissionCounts = Db.RolePermissions.AsNoTracking()
+            .GroupBy(rp => rp.RoleId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionary(x => x.Key, x => x.Count);
+
+        var roleNames = _roles.ToDictionary(r => r.Id, r => r.Name);
+        _userRoleNames = Db.UserRoles.AsNoTracking().ToList()
+            .GroupBy(ur => ur.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(ur => roleNames.GetValueOrDefault(ur.RoleId, "—")).ToList());
+    }
+
+    private IEnumerable<string> RoleNamesFor(User user) =>
+        _userRoleNames.TryGetValue(user.Id, out var names) ? names : Array.Empty<string>();
+
+    private void SetDefaultPayroll(CompanyCurrency currency)
+    {
+        foreach (var item in _currencies)
+        {
+            item.IsDefaultPayrollCurrency = item.Id == currency.Id;
+        }
+    }
+
+    private void SetDefaultReporting(CompanyCurrency currency)
+    {
+        foreach (var item in _currencies)
+        {
+            item.IsDefaultReportingCurrency = item.Id == currency.Id;
+        }
+    }
+
+    private async Task SaveCompanyAsync()
+    {
+        Session.Require(Permissions.CompanyEdit);
+
+        var validation = ValidationResult.Success();
+        validation.Require(_company!.LegalName, "Legal name");
+        validation.AddIf(
+            !string.IsNullOrWhiteSpace(_company.Email) && !_company.Email.Contains('@'),
+            "Email", "Email address is not valid.");
+
+        _validation = validation;
+        _saved = false;
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        await Db.SaveChangesAsync();
+        _validation = null;
+        _saved = true;
+        Load();
+    }
+
+    private async Task SaveCurrenciesAsync()
+    {
+        Session.Require(Permissions.CompanyEdit);
+
+        var validation = ValidationResult.Success();
+        validation.AddIf(_currencies.Count(c => c.IsEnabled) == 0, "Currencies",
+            "At least one currency must be enabled.");
+        validation.AddIf(_currencies.Count(c => c.IsDefaultPayrollCurrency) != 1, "Currencies",
+            "Exactly one default payroll currency is required.");
+        validation.AddIf(
+            _currencies.Any(c => c.IsDefaultPayrollCurrency && !c.IsEnabled), "Currencies",
+            "The default payroll currency must be enabled.");
+
+        _validation = validation;
+        _saved = false;
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        _company!.DefaultPayrollCurrency =
+            _currencies.First(c => c.IsDefaultPayrollCurrency).CurrencyCode;
+        _company.DefaultReportingCurrency =
+            _currencies.FirstOrDefault(c => c.IsDefaultReportingCurrency)?.CurrencyCode
+            ?? _company.DefaultPayrollCurrency;
+
+        await Db.SaveChangesAsync();
+        _validation = null;
+        _saved = true;
+        Load();
+    }
+
+    private async Task AddBankAccountAsync()
+    {
+        Session.Require(Permissions.CompanyEdit);
+
+        var validation = ValidationResult.Success();
+        validation.Require(_accountName, "Account name");
+        validation.Require(_bankName, "Bank");
+        validation.Require(_accountNumber, "Account number");
+        validation.AddIf(
+            Db.CompanyBankAccounts.Any(a => a.CompanyId == _company!.Id &&
+                                            a.AccountNumber == _accountNumber &&
+                                            a.CurrencyCode == _accountCurrency),
+            "Account number", "That account is already captured for this currency.");
+
+        _validation = validation;
+        _saved = false;
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        Db.CompanyBankAccounts.Add(new CompanyBankAccount
+        {
+            CompanyId = _company!.Id,
+            AccountName = _accountName,
+            BankName = _bankName,
+            BranchName = _branchName,
+            AccountNumber = _accountNumber,
+            CurrencyCode = _accountCurrency,
+            Purpose = _accountPurpose,
+            IsActive = true
+        });
+        await Db.SaveChangesAsync();
+
+        _accountName = _bankName = _branchName = _accountNumber = string.Empty;
+        _validation = null;
+        _saved = true;
+        Load();
+    }
+}

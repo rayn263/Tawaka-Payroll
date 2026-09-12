@@ -17,6 +17,12 @@ public abstract class StatutoryRule : AuditableEntity
 
     public string Jurisdiction { get; set; } = "ZW";
 
+    /// <summary>
+    /// Null where the rule is national (PAYE, NSSA, AIDS Levy). Set where the rule is specific to
+    /// one employer, such as an APWCS assessed rate or a NEC levy.
+    /// </summary>
+    public Guid? CompanyId { get; set; }
+
     /// <summary>ISO currency code, or null where the rule is currency-neutral.</summary>
     public string? Currency { get; set; }
 

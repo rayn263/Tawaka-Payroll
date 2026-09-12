@@ -1,0 +1,24 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+@inject PayrollDbContext Db
+
+@* The payroll mode is shown at all times. Development mode must never be mistaken for live. *@
+
+@if (_blockedRules > 0)
+{
+    <span class="mode-badge development" title="@($"{_blockedRules} statutory rules are not verified")">
+        DEVELOPMENT MODE — live payroll blocked
+    </span>
+}
+else
+{
+    <span class="mode-badge live">LIVE</span>
+}
+
+@code {
+    private int _blockedRules;
+
+    protected override void OnInitialized() =>
+        _blockedRules = Db.StatutoryRules
+            .AsNoTracking()
+            .Count(r => r.IsActive && r.VerificationStatus != VerificationStatus.Verified);
+}

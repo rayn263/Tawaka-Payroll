@@ -1,0 +1,14 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+
+<span class="sortable @(IsActive ? "active" : null)" @onclick="() => OnSort.InvokeAsync(Column)">
+    @ChildContent@(IsActive ? " ▾" : string.Empty)
+</span>
+
+@code {
+    [Parameter] public string Column { get; set; } = string.Empty;
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public EventCallback<string> OnSort { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool IsActive => string.Equals(Column, Current, StringComparison.OrdinalIgnoreCase);
+}

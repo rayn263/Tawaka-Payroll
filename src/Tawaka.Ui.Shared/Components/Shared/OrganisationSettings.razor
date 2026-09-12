@@ -1,0 +1,216 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+@inject PayrollDbContext Db
+@inject UserSession Session
+
+@* Departments, job titles and locations are configurable per company: a contractor and a
+   retailer need entirely different lists, so none of this is hard-coded. *@
+
+<div class="card">
+    <h2>Departments</h2>
+    @if (_departments.Count == 0)
+    {
+        <EmptyState Title="No departments yet" />
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Code</th><th>Name</th><th>Description</th><th>Active</th></tr></thead>
+            <tbody>
+            @foreach (var department in _departments)
+            {
+                <tr>
+                    <td class="mono">@department.Code</td>
+                    <td>@department.Name</td>
+                    <td>@department.Description</td>
+                    <td>@(department.IsActive ? "Yes" : "No")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    @if (Session.HasPermission(Permissions.CompanyEdit))
+    {
+        <div class="inline-form">
+            <input placeholder="Code" @bind="_departmentCode" />
+            <input placeholder="Name" @bind="_departmentName" />
+            <button class="btn btn-secondary" @onclick="AddDepartmentAsync">Add department</button>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2>Job titles</h2>
+    @if (_jobTitles.Count == 0)
+    {
+        <EmptyState Title="No job titles yet"
+                    Description="For example: General Worker, Painter, Tiler, Plumber, Electrician, Foreman, Driver, Project Manager." />
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Code</th><th>Name</th><th>Grade</th><th>Active</th></tr></thead>
+            <tbody>
+            @foreach (var title in _jobTitles)
+            {
+                <tr>
+                    <td class="mono">@title.Code</td>
+                    <td>@title.Name</td>
+                    <td>@title.Grade</td>
+                    <td>@(title.IsActive ? "Yes" : "No")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    @if (Session.HasPermission(Permissions.CompanyEdit))
+    {
+        <div class="inline-form">
+            <input placeholder="Code" @bind="_jobTitleCode" />
+            <input placeholder="Name" @bind="_jobTitleName" />
+            <button class="btn btn-secondary" @onclick="AddJobTitleAsync">Add job title</button>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2>Locations</h2>
+    @if (_locations.Count == 0)
+    {
+        <EmptyState Title="No locations yet"
+                    Description="For example: Harare, Bulawayo, Nyanga, or a standing site." />
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Code</th><th>Name</th><th>City</th><th>Active</th></tr></thead>
+            <tbody>
+            @foreach (var location in _locations)
+            {
+                <tr>
+                    <td class="mono">@location.Code</td>
+                    <td>@location.Name</td>
+                    <td>@location.City</td>
+                    <td>@(location.IsActive ? "Yes" : "No")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    @if (Session.HasPermission(Permissions.CompanyEdit))
+    {
+        <div class="inline-form">
+            <input placeholder="Code" @bind="_locationCode" />
+            <input placeholder="Name" @bind="_locationName" />
+            <button class="btn btn-secondary" @onclick="AddLocationAsync">Add location</button>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2>Employment types</h2>
+    <p class="muted">
+        Employment type carries payroll-processing defaults only. NSSA coverage comes from the
+        eligibility rule matching the code, and PAYE from the table matching the payment frequency.
+    </p>
+    <table class="data">
+        <thead>
+        <tr><th>Code</th><th>Name</th><th>Default frequency</th><th>Earnings basis</th>
+            <th>End date required</th><th>Timesheet</th><th>Accrues leave</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var type in _employmentTypes)
+        {
+            <tr>
+                <td class="mono">@type.Code</td>
+                <td>@type.Name</td>
+                <td>@type.DefaultPaymentFrequency</td>
+                <td>@type.DefaultEarningsBasis</td>
+                <td>@(type.RequiresContractEndDate ? "Yes" : "No")</td>
+                <td>@(type.RequiresTimesheet ? "Yes" : "No")</td>
+                <td>@(type.AccruesLeave ? "Yes" : "No")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private List<Department> _departments = new();
+    private List<JobTitle> _jobTitles = new();
+    private List<Location> _locations = new();
+    private List<EmploymentType> _employmentTypes = new();
+    private Guid _companyId;
+
+    private string _departmentCode = string.Empty;
+    private string _departmentName = string.Empty;
+    private string _jobTitleCode = string.Empty;
+    private string _jobTitleName = string.Empty;
+    private string _locationCode = string.Empty;
+    private string _locationName = string.Empty;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _departments = Db.Departments.AsNoTracking()
+            .Where(d => d.CompanyId == _companyId).OrderBy(d => d.Name).ToList();
+        _jobTitles = Db.JobTitles.AsNoTracking()
+            .Where(j => j.CompanyId == _companyId).OrderBy(j => j.Name).ToList();
+        _locations = Db.Locations.AsNoTracking()
+            .Where(l => l.CompanyId == _companyId).OrderBy(l => l.Name).ToList();
+        _employmentTypes = Db.EmploymentTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _companyId).OrderBy(t => t.DisplayOrder).ToList();
+    }
+
+    private async Task AddDepartmentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_departmentCode) || string.IsNullOrWhiteSpace(_departmentName) ||
+            Db.Departments.Any(d => d.CompanyId == _companyId && d.Code == _departmentCode))
+        {
+            return;
+        }
+
+        Db.Departments.Add(new Department
+        {
+            CompanyId = _companyId, Code = _departmentCode, Name = _departmentName
+        });
+        await Db.SaveChangesAsync();
+        _departmentCode = _departmentName = string.Empty;
+        Load();
+    }
+
+    private async Task AddJobTitleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_jobTitleCode) || string.IsNullOrWhiteSpace(_jobTitleName) ||
+            Db.JobTitles.Any(j => j.CompanyId == _companyId && j.Code == _jobTitleCode))
+        {
+            return;
+        }
+
+        Db.JobTitles.Add(new JobTitle
+        {
+            CompanyId = _companyId, Code = _jobTitleCode, Name = _jobTitleName
+        });
+        await Db.SaveChangesAsync();
+        _jobTitleCode = _jobTitleName = string.Empty;
+        Load();
+    }
+
+    private async Task AddLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_locationCode) || string.IsNullOrWhiteSpace(_locationName) ||
+            Db.Locations.Any(l => l.CompanyId == _companyId && l.Code == _locationCode))
+        {
+            return;
+        }
+
+        Db.Locations.Add(new Location
+        {
+            CompanyId = _companyId, Code = _locationCode, Name = _locationName
+        });
+        await Db.SaveChangesAsync();
+        _locationCode = _locationName = string.Empty;
+        Load();
+    }
+}

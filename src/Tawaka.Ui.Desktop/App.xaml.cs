@@ -32,11 +32,25 @@ public partial class App : System.Windows.Application
 
         Services = services.BuildServiceProvider();
 
-        // Apply migrations and seed the statutory baseline on first run.
+        // Apply migrations and run first-run seeding.
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<PayrollDbContext>();
         context.Database.Migrate();
-        scope.ServiceProvider.GetRequiredService<StatutoryRuleSeeder>()
+
+        var outcome = scope.ServiceProvider.GetRequiredService<ApplicationSeeder>()
             .SeedAsync().GetAwaiter().GetResult();
+
+        // The first administrator password is generated, not defaulted, and is shown exactly once.
+        if (outcome.Security.AdministratorCreated)
+        {
+            MessageBox.Show(
+                "A first administrator account has been created.\n\n" +
+                $"Username: admin\nPassword: {outcome.Security.GeneratedPassword}\n\n" +
+                "Write this down now — it is not stored anywhere and cannot be shown again. " +
+                "You will be asked to change it when you sign in.",
+                "Tawaka Payroll — first run",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
     }
 }

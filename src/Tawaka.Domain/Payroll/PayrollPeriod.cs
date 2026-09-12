@@ -26,6 +26,8 @@ public enum PayrollMode
 /// </summary>
 public class PayrollPeriod : AuditableEntity, ILockable
 {
+    public Guid CompanyId { get; set; }
+
     public string Code { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;

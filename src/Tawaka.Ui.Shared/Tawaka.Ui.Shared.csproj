@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.31" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tawaka.Domain\Tawaka.Domain.csproj" />
+    <ProjectReference Include="..\Tawaka.Application\Tawaka.Application.csproj" />
+    <ProjectReference Include="..\Tawaka.Payroll.Engine\Tawaka.Payroll.Engine.csproj" />
+    <ProjectReference Include="..\Tawaka.Infrastructure\Tawaka.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

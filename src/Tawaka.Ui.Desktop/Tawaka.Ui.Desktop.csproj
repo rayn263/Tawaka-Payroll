@@ -4,9 +4,11 @@
     The desktop shell: a WPF host with a BlazorWebView, so screens are Razor components that can
     later be served unchanged by ASP.NET Core (ADR-001).
 
-    This project targets net8.0-windows and therefore builds only on Windows. The cross-platform
-    solution (Tawaka.Payroll.Core.sln) deliberately excludes it so that the domain, engine,
-    application, infrastructure and all tests build and run on any platform.
+    Screens themselves live in Tawaka.Ui.Shared, a Razor class library targeting net8.0, so the
+    whole user interface compiles and is verified on any platform. This project is only the host:
+    a window, a WebView and the startup wiring. It targets net8.0-windows and therefore builds
+    only on Windows, which is why the cross-platform solution (Tawaka.Payroll.Core.sln) excludes
+    it (ADR-019).
   -->
 
   <PropertyGroup>
@@ -31,6 +33,7 @@
     <ProjectReference Include="..\Tawaka.Application\Tawaka.Application.csproj" />
     <ProjectReference Include="..\Tawaka.Payroll.Engine\Tawaka.Payroll.Engine.csproj" />
     <ProjectReference Include="..\Tawaka.Infrastructure\Tawaka.Infrastructure.csproj" />
+    <ProjectReference Include="..\Tawaka.Ui.Shared\Tawaka.Ui.Shared.csproj" />
   </ItemGroup>
 
 </Project>

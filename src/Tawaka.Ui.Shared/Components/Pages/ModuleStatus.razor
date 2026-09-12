@@ -1,0 +1,88 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/payroll"
+@page "/time"
+@page "/loans"
+@page "/reports"
+@inject NavigationManager Nav
+
+@* Rather than a screen that looks finished but does nothing, each module that has not been built
+   says plainly what it will contain and which milestone it arrives in. *@
+
+<h1>@Module.Title</h1>
+
+<div class="alert alert-info">
+    <strong>This module has not been built yet.</strong>
+    It is scheduled for @Module.Milestone.
+</div>
+
+<div class="card">
+    <h2>What it will contain</h2>
+    <ul class="feature-list">
+        @foreach (var feature in Module.Features)
+        {
+            <li>@feature</li>
+        }
+    </ul>
+    @if (!string.IsNullOrWhiteSpace(Module.Dependency))
+    {
+        <p class="muted">@Module.Dependency</p>
+    }
+</div>
+
+@code {
+    private record ModuleInfo(string Title, string Milestone, string[] Features, string? Dependency);
+
+    private static readonly ModuleInfo Payroll = new(
+        "Payroll", "Milestones 3 and 4",
+        new[]
+        {
+            "Payroll periods and calendars: monthly, weekly, fortnightly and custom",
+            "The calculation engine: gross, NSSA, taxable income, PAYE, credits, AIDS Levy, employer costs",
+            "Per-employee calculation preview with a full drill-down to how every figure was derived",
+            "The approval workflow: draft, calculate, review, approve, finalise, pay, lock",
+            "Payslips, and the statutory obligation register"
+        },
+        "Live payroll additionally requires the statutory rules to be verified. See the Statutory screen.");
+
+    private static readonly ModuleInfo Time = new(
+        "Time & Attendance", "Milestone 5",
+        new[]
+        {
+            "Timesheets with days and hours worked, overtime, Sunday and public holiday hours",
+            "Timesheet approval feeding directly into payroll",
+            "Leave types, entitlements, balances and requests",
+            "Public holiday calendar"
+        },
+        "Project-based and casual employees already require timesheets, which is why this follows payroll closely.");
+
+    private static readonly ModuleInfo Loans = new(
+        "Loans & Advances", "Milestone 5",
+        new[]
+        {
+            "Employee loans with principal, instalments, interest and running balance",
+            "Salary advances and their recovery",
+            "Repayment schedules that feed scheduled deductions into payroll automatically",
+            "Loan statements per employee"
+        },
+        null);
+
+    private static readonly ModuleInfo Reports = new(
+        "Reports", "Milestone 4",
+        new[]
+        {
+            "Payroll summary, register, employee earnings and deductions, net pay, employer cost",
+            "Tax reports: PAYE, AIDS Levy and taxable income, separately per currency",
+            "NSSA and APWCS reports",
+            "Labour cost by project, department and employee type",
+            "Export to PDF, Excel and CSV"
+        },
+        "Reports read payroll results, so they follow the calculation engine.");
+
+    private ModuleInfo Module => new Uri(Nav.Uri).AbsolutePath.Trim('/').ToLowerInvariant() switch
+    {
+        "time" => Time,
+        "loans" => Loans,
+        "reports" => Reports,
+        _ => Payroll
+    };
+}

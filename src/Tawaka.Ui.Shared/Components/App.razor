@@ -1,0 +1,33 @@
+@namespace Tawaka.Ui.Shared.Components
+
+@* Root component. Until someone signs in, the only thing rendered is the sign-in screen:
+   the audit trail must never record an action against an anonymous user. *@
+
+@if (!Session.IsAuthenticated)
+{
+    <Login OnSignedIn="StateHasChanged" />
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div class="card">
+                    <h2>Page not found</h2>
+                    <p class="muted">That screen does not exist.</p>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    [Inject] private UserSession Session { get; set; } = default!;
+
+    protected override void OnInitialized() => Session.Changed += StateHasChanged;
+
+    public void Dispose() => Session.Changed -= StateHasChanged;
+}

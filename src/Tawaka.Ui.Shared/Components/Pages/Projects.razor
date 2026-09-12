@@ -1,0 +1,150 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/projects"
+@inject PayrollDbContext Db
+@inject UserSession Session
+
+<div class="page-header">
+    <h1>Projects &amp; sites</h1>
+</div>
+
+<p class="muted">
+    Labour cost is attributed to the project and site an employee works on, which is what makes
+    job costing possible for a contracting business.
+</p>
+
+@if (Session.HasPermission(Permissions.ProjectsEdit))
+{
+    <div class="card">
+        <h2>Add project</h2>
+        <ValidationSummaryPanel Result="_validation" />
+        <div class="form-grid">
+            <div><label>Code *</label><input @bind="_code" /></div>
+            <div><label>Name *</label><input @bind="_name" /></div>
+            <div><label>Start date</label><input type="date" @bind="_startDate" /></div>
+            <div><label>End date</label><input type="date" @bind="_endDate" /></div>
+            <div>
+                <label>Client</label>
+                <select @bind="_clientId">
+                    <option value="">—</option>
+                    @foreach (var client in _clients)
+                    {
+                        <option value="@client.Id">@client.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Status</label>
+                <select @bind="_status">
+                    @foreach (var status in Enum.GetValues<ProjectStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="AddProjectAsync">Add project</button>
+        </div>
+    </div>
+}
+
+<div class="card">
+    @if (_projects.Count == 0)
+    {
+        <EmptyState Title="No projects yet"
+                    Description="Add the jobs and sites you want labour costed against." />
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+            <tr><th>Code</th><th>Project</th><th>Client</th><th>Start</th><th>End</th>
+                <th class="num">Sites</th><th class="num">Assigned</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var project in _projects)
+            {
+                <tr>
+                    <td class="mono">@project.Code</td>
+                    <td class="strong">@project.Name</td>
+                    <td>@(project.Client?.Name ?? "—")</td>
+                    <td>@project.StartDate.ToString("dd MMM yyyy")</td>
+                    <td>@(project.EndDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                    <td class="num">@project.Sites.Count</td>
+                    <td class="num">@_assignedCounts.GetValueOrDefault(project.Id)</td>
+                    <td><StatusBadge Project="project.Status" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<Project> _projects = new();
+    private List<Client> _clients = new();
+    private Dictionary<Guid, int> _assignedCounts = new();
+    private ValidationResult? _validation;
+
+    private string _code = string.Empty;
+    private string _name = string.Empty;
+    private DateTime _startDate = DateTime.Today;
+    private DateTime? _endDate;
+    private string _clientId = string.Empty;
+    private ProjectStatus _status = ProjectStatus.Planned;
+    private Guid _companyId;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _projects = Db.Projects.AsNoTracking()
+            .Include(p => p.Client).Include(p => p.Sites)
+            .Where(p => p.CompanyId == _companyId)
+            .OrderBy(p => p.Code).ToList();
+        _clients = Db.Clients.AsNoTracking()
+            .Where(c => c.CompanyId == _companyId && c.IsActive).OrderBy(c => c.Name).ToList();
+        _assignedCounts = Db.EmployeeProjectAssignments.AsNoTracking()
+            .Where(a => a.IsActive)
+            .GroupBy(a => a.ProjectId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionary(x => x.Key, x => x.Count);
+    }
+
+    private async Task AddProjectAsync()
+    {
+        var validation = ValidationResult.Success();
+        validation.Require(_code, "Code");
+        validation.Require(_name, "Name");
+        validation.AddIf(
+            _endDate is not null && _endDate < _startDate, "End date",
+            "End date cannot precede the start date.");
+        validation.AddIf(
+            Db.Projects.Any(p => p.CompanyId == _companyId && p.Code == _code), "Code",
+            $"Project code '{_code}' is already in use.");
+
+        _validation = validation;
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        Db.Projects.Add(new Project
+        {
+            CompanyId = _companyId,
+            Code = _code,
+            Name = _name,
+            ClientId = Guid.TryParse(_clientId, out var clientId) ? clientId : null,
+            StartDate = DateOnly.FromDateTime(_startDate),
+            EndDate = _endDate is null ? null : DateOnly.FromDateTime(_endDate.Value),
+            Status = _status
+        });
+        await Db.SaveChangesAsync();
+
+        _code = string.Empty;
+        _name = string.Empty;
+        _validation = null;
+        Load();
+    }
+}

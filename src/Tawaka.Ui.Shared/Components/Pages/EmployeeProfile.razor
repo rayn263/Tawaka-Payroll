@@ -1,0 +1,409 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/employees/{EmployeeId:guid}"
+@inject PayrollDbContext Db
+@inject EmployeeContractService Contracts
+@inject UserSession Session
+
+@if (_employee is null)
+{
+    <div class="card"><EmptyState Title="Employee not found" /></div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1>@_employee.FullName</h1>
+            <div class="subtitle">
+                @_employee.EmployeeNumber
+                @if (_currentContract is not null)
+                {
+                    <text> · @JobTitleName · @DepartmentName · @EmploymentTypeName</text>
+                }
+            </div>
+        </div>
+        <StatusBadge Employee="_employee.Status" />
+    </div>
+
+    <div class="tabs">
+        @foreach (var tab in Tabs)
+        {
+            <button class="tab @(tab == _tab ? "active" : null)" @onclick="() => _tab = tab">@tab</button>
+        }
+    </div>
+
+    <div class="card">
+        @switch (_tab)
+        {
+            case "Personal":
+                <dl class="detail">
+                    <dt>Full name</dt><dd>@_employee.FullName</dd>
+                    <dt>National ID</dt><dd>@Show(_employee.NationalId)</dd>
+                    <dt>Date of birth</dt><dd>@Show(_employee.DateOfBirth)</dd>
+                    <dt>Gender</dt><dd>@_employee.Gender</dd>
+                    <dt>Nationality</dt><dd>@Show(_employee.Nationality)</dd>
+                    <dt>Phone</dt><dd>@Show(_employee.Phone)</dd>
+                    <dt>Email</dt><dd>@Show(_employee.Email)</dd>
+                    <dt>Address</dt><dd>@Show(_employee.AddressLine1) @_employee.City</dd>
+                </dl>
+                break;
+
+            case "Employment":
+                <dl class="detail">
+                    <dt>Engaged</dt><dd>@_employee.HireDate.ToString("dd MMM yyyy")</dd>
+                    <dt>Status</dt><dd><StatusBadge Employee="_employee.Status" /></dd>
+                    <dt>Employment type</dt><dd>@EmploymentTypeName</dd>
+                    <dt>Job title</dt><dd>@JobTitleName</dd>
+                    <dt>Department</dt><dd>@DepartmentName</dd>
+                    <dt>Location</dt><dd>@LocationName</dd>
+                    @if (_employee.TerminationDate is not null)
+                    {
+                        <dt>Terminated</dt><dd>@_employee.TerminationDate.Value.ToString("dd MMM yyyy")</dd>
+                        <dt>Reason</dt><dd>@Show(_employee.TerminationReason)</dd>
+                    }
+                </dl>
+
+                <h3>Status history</h3>
+                @if (_statusHistory.Count == 0)
+                {
+                    <EmptyState Title="No status changes recorded" />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead><tr><th>Date</th><th>From</th><th>To</th><th>Reason</th><th>Changed by</th></tr></thead>
+                        <tbody>
+                        @foreach (var entry in _statusHistory)
+                        {
+                            <tr>
+                                <td>@entry.EffectiveDate.ToString("dd MMM yyyy")</td>
+                                <td>@entry.FromStatus</td>
+                                <td>@entry.ToStatus</td>
+                                <td>@Show(entry.Reason)</td>
+                                <td>@entry.ChangedBy</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Contract":
+                @if (!Session.HasPermission(Permissions.EmployeesViewSalary))
+                {
+                    <EmptyState Title="Salary information is restricted"
+                                Description="You do not have permission to view salary and rates." />
+                }
+                else if (_contractHistory.Count == 0)
+                {
+                    <EmptyState Title="No contract recorded"
+                                Description="This employee cannot be paid until a contract is captured." />
+                }
+                else
+                {
+                    <p class="muted">
+                        Contract versions are never overwritten. Payroll for a past period uses the
+                        version that applied then.
+                    </p>
+                    <table class="data">
+                        <thead>
+                        <tr>
+                            <th>Version</th><th>From</th><th>To</th><th>Type</th><th>Frequency</th>
+                            <th>Basis</th><th class="num">Rate</th><th>Reason for change</th><th>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var contract in _contractHistory)
+                        {
+                            <tr class="@(contract.IsCurrent ? "highlight" : null)">
+                                <td>v@(contract.VersionNumber)</td>
+                                <td>@contract.StartDate.ToString("dd MMM yyyy")</td>
+                                <td>@(contract.EndDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td>@TypeName(contract.EmploymentTypeId)</td>
+                                <td>@contract.PaymentFrequency</td>
+                                <td>@contract.EarningsBasis</td>
+                                <td class="num">
+                                    <MoneyText Amount="contract.PrimaryRate" Currency="contract.PayrollCurrency" />
+                                </td>
+                                <td>@Show(contract.ChangeReason)</td>
+                                <td><StatusBadge Contract="contract.Status" /></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Earnings":
+                @if (_earnings.Count == 0)
+                {
+                    <EmptyState Title="No recurring earnings"
+                                Description="Standing allowances appear here once captured." />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead>
+                        <tr><th>Earning</th><th class="num">Amount</th><th>From</th><th>To</th>
+                            <th>Taxable</th><th>NSSA</th><th>Treatment</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var earning in _earnings)
+                        {
+                            <tr>
+                                <td>@earning.EarningType?.Name</td>
+                                <td class="num"><MoneyText Amount="earning.Amount" Currency="earning.CurrencyCode" /></td>
+                                <td>@earning.EffectiveFrom.ToString("dd MMM yyyy")</td>
+                                <td>@(earning.EffectiveTo?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td>@YesNo(earning.EarningType?.IsTaxable)</td>
+                                <td>@YesNo(earning.EarningType?.IsNssaApplicable)</td>
+                                <td>
+                                    <StatusBadge Verification="earning.EarningType?.TreatmentVerificationStatus" />
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Deductions":
+                @if (_deductions.Count == 0)
+                {
+                    <EmptyState Title="No recurring deductions"
+                                Description="Medical aid, pension and union deductions appear here." />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead>
+                        <tr><th>Deduction</th><th class="num">Amount</th><th>From</th><th>To</th>
+                            <th>Reduces taxable income</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var deduction in _deductions)
+                        {
+                            <tr>
+                                <td>@deduction.DeductionType?.Name</td>
+                                <td class="num"><MoneyText Amount="deduction.Amount" Currency="deduction.CurrencyCode" /></td>
+                                <td>@deduction.EffectiveFrom.ToString("dd MMM yyyy")</td>
+                                <td>@(deduction.EffectiveTo?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td>@YesNo(deduction.DeductionType?.ReducesTaxableIncome)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Statutory":
+                <dl class="detail">
+                    <dt>Tax number (ZIMRA)</dt><dd>@Show(_statutory?.TaxNumber)</dd>
+                    <dt>PAYE exempt</dt><dd>@YesNo(_statutory?.IsPayeExempt)</dd>
+                    <dt>NSSA number</dt><dd>@Show(_statutory?.NssaNumber)</dd>
+                    <dt>NSSA coverage</dt><dd>@NssaCoverage</dd>
+                    <dt>Elderly credit</dt><dd>@YesNo(_statutory?.IsElderlyCreditEligible)</dd>
+                    <dt>Disabled credit</dt><dd>@YesNo(_statutory?.IsDisabledCreditEligible)</dd>
+                    <dt>Blind credit</dt><dd>@YesNo(_statutory?.IsBlindCreditEligible)</dd>
+                    <dt>NEC member</dt><dd>@YesNo(_statutory?.IsNecMember)</dd>
+                </dl>
+                @if (_statutory is null || string.IsNullOrWhiteSpace(_statutory.TaxNumber))
+                {
+                    <div class="alert alert-warning">
+                        No tax number is recorded. This employee cannot be included in a statutory
+                        return until one is captured.
+                    </div>
+                }
+                break;
+
+            case "Payment":
+                @if (_accounts.Count == 0)
+                {
+                    <EmptyState Title="No payment accounts"
+                                Description="Add a bank account, mobile money number or cash arrangement." />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead>
+                        <tr><th>Method</th><th>Currency</th><th>Account name</th><th>Details</th>
+                            <th>Allocation</th><th>Primary</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var account in _accounts)
+                        {
+                            <tr>
+                                <td>@account.PaymentMethod</td>
+                                <td>@(account.CurrencyCode == "ZWG" ? "ZiG" : account.CurrencyCode)</td>
+                                <td>@Show(account.AccountName)</td>
+                                <td>@account.Describe()</td>
+                                <td>@account.AllocationType</td>
+                                <td>@YesNo(account.IsPrimary)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <p class="muted">
+                        An account's currency is recorded per account: it does not have to match the
+                        currency the employee's payroll is denominated in.
+                    </p>
+                }
+                break;
+
+            case "Projects":
+                @if (_assignments.Count == 0)
+                {
+                    <EmptyState Title="Not assigned to any project" />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead><tr><th>Project</th><th>From</th><th>To</th><th class="num">Allocation</th></tr></thead>
+                        <tbody>
+                        @foreach (var assignment in _assignments)
+                        {
+                            <tr>
+                                <td>@assignment.Project?.Name</td>
+                                <td>@assignment.StartDate.ToString("dd MMM yyyy")</td>
+                                <td>@(assignment.EndDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td class="num">@assignment.AllocationPercent.ToString("N0")%</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Payroll history":
+            case "Payslips":
+                <EmptyState Title="@($"{_tab} arrive with the payroll engine")"
+                            Description="Payroll runs and payslips are built in Milestones 3 and 4. Nothing is shown here because no payroll has been processed — not because it is hidden." />
+                break;
+
+            case "Documents":
+                @if (_documents.Count == 0)
+                {
+                    <EmptyState Title="No documents attached"
+                                Description="Contracts, identity documents and certificates can be attached here." />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead><tr><th>Type</th><th>Title</th><th>Expires</th></tr></thead>
+                        <tbody>
+                        @foreach (var document in _documents)
+                        {
+                            <tr>
+                                <td>@document.DocumentType</td>
+                                <td>@document.Title</td>
+                                <td>@(document.ExpiryDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid EmployeeId { get; set; }
+
+    private static readonly string[] Tabs =
+    {
+        "Personal", "Employment", "Contract", "Earnings", "Deductions", "Statutory",
+        "Payment", "Projects", "Payroll history", "Payslips", "Documents"
+    };
+
+    private string _tab = "Personal";
+
+    private Employee? _employee;
+    private EmployeeStatutoryProfile? _statutory;
+    private EmployeeContract? _currentContract;
+    private List<EmployeeContract> _contractHistory = new();
+    private List<EmployeeStatusHistory> _statusHistory = new();
+    private List<EmployeeRecurringEarning> _earnings = new();
+    private List<EmployeeRecurringDeduction> _deductions = new();
+    private List<EmployeePaymentAccount> _accounts = new();
+    private List<EmployeeProjectAssignment> _assignments = new();
+    private List<EmployeeDocument> _documents = new();
+    private Dictionary<Guid, string> _types = new();
+    private Dictionary<Guid, string> _jobTitles = new();
+    private Dictionary<Guid, string> _departments = new();
+    private Dictionary<Guid, string> _locations = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _employee = await Db.Employees.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == EmployeeId);
+        if (_employee is null)
+        {
+            return;
+        }
+
+        _statutory = await Db.EmployeeStatutoryProfiles.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.EmployeeId == EmployeeId);
+        _contractHistory = await Contracts.GetHistoryAsync(EmployeeId);
+        _currentContract = _contractHistory.FirstOrDefault(c => c.IsCurrent);
+        _statusHistory = await Db.EmployeeStatusHistory.AsNoTracking()
+            .Where(h => h.EmployeeId == EmployeeId)
+            .OrderByDescending(h => h.EffectiveDate).ToListAsync();
+        _earnings = await Db.EmployeeRecurringEarnings.AsNoTracking()
+            .Include(e => e.EarningType)
+            .Where(e => e.EmployeeId == EmployeeId).ToListAsync();
+        _deductions = await Db.EmployeeRecurringDeductions.AsNoTracking()
+            .Include(d => d.DeductionType)
+            .Where(d => d.EmployeeId == EmployeeId).ToListAsync();
+        _accounts = await Db.EmployeePaymentAccounts.AsNoTracking()
+            .Where(a => a.EmployeeId == EmployeeId).ToListAsync();
+        _assignments = await Db.EmployeeProjectAssignments.AsNoTracking()
+            .Include(a => a.Project)
+            .Where(a => a.EmployeeId == EmployeeId).ToListAsync();
+        _documents = await Db.EmployeeDocuments.AsNoTracking()
+            .Where(d => d.EmployeeId == EmployeeId).ToListAsync();
+
+        _types = await Db.EmploymentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Name);
+        _jobTitles = await Db.JobTitles.AsNoTracking().ToDictionaryAsync(j => j.Id, j => j.Name);
+        _departments = await Db.Departments.AsNoTracking().ToDictionaryAsync(d => d.Id, d => d.Name);
+        _locations = await Db.Locations.AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Name);
+    }
+
+    private string EmploymentTypeName =>
+        _currentContract is null ? "—" : TypeName(_currentContract.EmploymentTypeId);
+
+    private string TypeName(Guid id) => _types.TryGetValue(id, out var name) ? name : "—";
+
+    private string JobTitleName => Lookup(_jobTitles, _currentContract?.JobTitleId);
+
+    private string DepartmentName => Lookup(_departments, _currentContract?.DepartmentId);
+
+    private string LocationName => Lookup(_locations, _currentContract?.LocationId);
+
+    private string NssaCoverage
+    {
+        get
+        {
+            if (_statutory?.NssaEligibilityOverride is { } over)
+            {
+                return over ? "Covered (overridden)" : "Not covered (overridden)";
+            }
+
+            if (_currentContract is null)
+            {
+                return "Determined by the eligibility rule for the employment type";
+            }
+
+            var code = _types.TryGetValue(_currentContract.EmploymentTypeId, out var name) ? name : "—";
+            return $"Per the NSSA eligibility rule for {code}";
+        }
+    }
+
+    private static string Lookup(IReadOnlyDictionary<Guid, string> source, Guid? id) =>
+        id.HasValue && source.TryGetValue(id.Value, out var value) ? value : "—";
+
+    private static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string Show(DateOnly? value) => value?.ToString("dd MMM yyyy") ?? "—";
+
+    private static string YesNo(bool? value) => value is null ? "—" : value.Value ? "Yes" : "No";
+}

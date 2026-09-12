@@ -1,0 +1,77 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+
+@* A consistent status chip. Verification grades and record statuses read the same everywhere. *@
+
+<span class="badge @CssClass">@Text</span>
+
+@code {
+    [Parameter] public VerificationStatus? Verification { get; set; }
+    [Parameter] public EmployeeStatus? Employee { get; set; }
+    [Parameter] public ContractStatus? Contract { get; set; }
+    [Parameter] public ProjectStatus? Project { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Tone { get; set; }
+
+    private string Text => Label
+        ?? Verification?.ToString()
+        ?? Employee?.ToString()
+        ?? Contract?.ToString()
+        ?? Project?.ToString()
+        ?? string.Empty;
+
+    private string CssClass
+    {
+        get
+        {
+            if (Tone is not null)
+            {
+                return Tone;
+            }
+
+            if (Verification is { } verification)
+            {
+                return verification switch
+                {
+                    VerificationStatus.Verified => "verified",
+                    VerificationStatus.Supported => "supported",
+                    VerificationStatus.Unverified => "unverified",
+                    _ => "disabled"
+                };
+            }
+
+            if (Employee is { } employee)
+            {
+                return employee switch
+                {
+                    EmployeeStatus.Active => "verified",
+                    EmployeeStatus.Suspended => "supported",
+                    EmployeeStatus.Terminated => "unverified",
+                    _ => "disabled"
+                };
+            }
+
+            if (Contract is { } contract)
+            {
+                return contract switch
+                {
+                    ContractStatus.Active => "verified",
+                    ContractStatus.Draft => "supported",
+                    _ => "disabled"
+                };
+            }
+
+            if (Project is { } project)
+            {
+                return project switch
+                {
+                    ProjectStatus.Active => "verified",
+                    ProjectStatus.Planned or ProjectStatus.OnHold => "supported",
+                    ProjectStatus.Cancelled => "unverified",
+                    _ => "disabled"
+                };
+            }
+
+            return "disabled";
+        }
+    }
+}

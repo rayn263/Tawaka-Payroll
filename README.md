@@ -2,22 +2,24 @@
 
 A professional, Windows-based payroll management system for businesses operating in Zimbabwe.
 
-> **Status: Milestone 1 (Foundation) complete — awaiting approval.**
-> The solution skeleton, domain model, database, statutory rule infrastructure, audit trail,
-> period locking and test suite are in place. There is no payroll calculation engine yet, and
-> **no live payroll can be produced**: every seeded statutory rule is unverified and the live
-> payroll gate blocks it. See `PROJECT_STATE.md`.
+> **Status: Milestone 2 (Company, employees and security) complete — awaiting approval.**
+> The company profile, employee master, effective-dated employment contracts, projects and sites,
+> earnings and deductions, authentication with role-based permissions, and the first working
+> screens are in place. There is no payroll calculation engine yet, and **no live payroll can be
+> produced**: every seeded statutory rule is unverified and the live payroll gate blocks it.
+> See `PROJECT_STATE.md`.
 
 ## Quick start
 
 ```bash
 apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
 ./build.sh                          # build the cross-platform solution
-./test.sh                           # 91 passing, 31 skipped (pending milestones)
+./test.sh                           # 195 passing, 31 skipped (pending milestones)
 ./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
 ```
 
-The Windows desktop shell builds from `Tawaka.Payroll.sln` on Windows only.
+All screens live in `src/Tawaka.Ui.Shared` and compile anywhere. The Windows host builds from
+`Tawaka.Payroll.sln` on Windows only.
 
 ## What this is
 

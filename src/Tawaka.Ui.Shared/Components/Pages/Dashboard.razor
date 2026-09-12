@@ -1,0 +1,174 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/"
+@inject PayrollDbContext Db
+@inject LivePayrollGate Gate
+
+<h1>Dashboard</h1>
+
+@if (_company is not null && _company.LegalName == "Unconfigured Company")
+{
+    <div class="alert alert-warning">
+        <strong>Company profile is not configured.</strong>
+        Enter your legal name, registration details and statutory identifiers in
+        <a href="settings">Settings</a> before running payroll.
+    </div>
+}
+
+<div class="stat-row">
+    <div class="stat"><div class="stat-value">@_total</div><div class="stat-label">Total employees</div></div>
+    <div class="stat"><div class="stat-value">@_active</div><div class="stat-label">Active</div></div>
+    <div class="stat"><div class="stat-value">@_permanent</div><div class="stat-label">Permanent</div></div>
+    <div class="stat"><div class="stat-value">@_contract</div><div class="stat-label">Contract</div></div>
+    <div class="stat"><div class="stat-value">@_casual</div><div class="stat-label">Casual</div></div>
+    <div class="stat"><div class="stat-value">@_projects</div><div class="stat-label">Active projects</div></div>
+</div>
+
+@* Currency totals are reported separately and never added together. *@
+<div class="card">
+    <h2>Contracted monthly basic pay by currency</h2>
+    @if (_currencyTotals.Count == 0)
+    {
+        <EmptyState Title="No current contracts yet"
+                    Description="Add employees and their contracts to see committed payroll cost." />
+    }
+    else
+    {
+        <table>
+            <thead>
+            <tr><th>Currency</th><th class="num">Employees</th><th class="num">Monthly basic</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var row in _currencyTotals)
+            {
+                <tr>
+                    <td>@(row.Currency == "ZWG" ? "ZiG" : row.Currency)</td>
+                    <td class="num">@row.Count</td>
+                    <td class="num"><MoneyText Amount="row.Total" Currency="row.Currency" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">
+            Totals are shown per currency. USD and ZiG are never combined without an explicit,
+            recorded conversion.
+        </p>
+    }
+</div>
+
+<div class="card">
+    <h2>Attention required</h2>
+    @if (_warnings.Count == 0)
+    {
+        <EmptyState Title="Nothing needs attention" />
+    }
+    else
+    {
+        <ul class="warning-list">
+            @foreach (var warning in _warnings)
+            {
+                <li class="warning @warning.Tone">
+                    <span class="warning-icon">!</span>
+                    <span>@warning.Message</span>
+                    @if (warning.Link is not null)
+                    {
+                        <a href="@warning.Link">Open</a>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private record CurrencyTotal(string Currency, int Count, decimal Total);
+    private record Warning(string Message, string Tone, string? Link);
+
+    private Company? _company;
+    private int _total, _active, _permanent, _contract, _casual, _projects;
+    private List<CurrencyTotal> _currencyTotals = new();
+    private readonly List<Warning> _warnings = new();
+
+    protected override void OnInitialized()
+    {
+        _company = Db.Companies.AsNoTracking().FirstOrDefault();
+
+        var employees = Db.Employees.AsNoTracking().ToList();
+        _total = employees.Count;
+        _active = employees.Count(e => e.Status == EmployeeStatus.Active);
+
+        var types = Db.EmploymentTypes.AsNoTracking().ToDictionary(t => t.Id, t => t.Code);
+        var current = Db.EmployeeContracts.AsNoTracking().Where(c => c.IsCurrent).ToList();
+
+        _permanent = current.Count(c => Code(types, c) == "Permanent");
+        _contract = current.Count(c => Code(types, c) == "Contract");
+        _casual = current.Count(c => Code(types, c) == "Casual");
+        _projects = Db.Projects.AsNoTracking().Count(p => p.Status == ProjectStatus.Active);
+
+        _currencyTotals = current
+            .GroupBy(c => c.PayrollCurrency)
+            .Select(g => new CurrencyTotal(g.Key, g.Count(), g.Sum(c => c.PrimaryRate ?? 0m)))
+            .OrderBy(r => r.Currency)
+            .ToList();
+
+        BuildWarnings(current, employees);
+    }
+
+    private static string Code(IReadOnlyDictionary<Guid, string> types, EmployeeContract contract) =>
+        types.TryGetValue(contract.EmploymentTypeId, out var code) ? code : string.Empty;
+
+    private void BuildWarnings(List<EmployeeContract> current, List<Employee> employees)
+    {
+        var blocked = Db.StatutoryRules.AsNoTracking()
+            .Count(r => r.IsActive && r.VerificationStatus != VerificationStatus.Verified);
+        if (blocked > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{blocked} statutory rules are not verified. Live payroll is blocked until they are " +
+                "confirmed against the official sources.", "error", "statutory"));
+        }
+
+        var missingTax = employees.Count(e => e.Status == EmployeeStatus.Active &&
+            !Db.EmployeeStatutoryProfiles.AsNoTracking()
+                .Any(p => p.EmployeeId == e.Id && p.TaxNumber != null));
+        if (missingTax > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{missingTax} active employees have no tax number recorded.", "warning", "employees"));
+        }
+
+        var missingNssa = employees.Count(e => e.Status == EmployeeStatus.Active &&
+            !Db.EmployeeStatutoryProfiles.AsNoTracking()
+                .Any(p => p.EmployeeId == e.Id && p.NssaNumber != null));
+        if (missingNssa > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{missingNssa} active employees have no NSSA number recorded.", "warning", "employees"));
+        }
+
+        var soon = DateOnly.FromDateTime(DateTime.Today).AddDays(30);
+        var expiring = current.Count(c => c.EndDate.HasValue && c.EndDate.Value <= soon);
+        if (expiring > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{expiring} contracts expire within 30 days.", "warning", "employees"));
+        }
+
+        var withoutContract = employees.Count(e => e.Status == EmployeeStatus.Active &&
+                                                   current.All(c => c.EmployeeId != e.Id));
+        if (withoutContract > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{withoutContract} active employees have no current contract and cannot be paid.",
+                "error", "employees"));
+        }
+
+        var unverifiedEarnings = Db.EarningTypes.AsNoTracking()
+            .Count(t => t.IsActive && t.TreatmentVerificationStatus != VerificationStatus.Verified);
+        if (unverifiedEarnings > 0)
+        {
+            _warnings.Add(new Warning(
+                $"{unverifiedEarnings} earning types have an unverified statutory treatment.",
+                "warning", "settings"));
+        }
+    }
+}

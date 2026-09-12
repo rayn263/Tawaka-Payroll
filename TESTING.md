@@ -12,7 +12,7 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **91 passing, 31 skipped, 0 failing.**
+Current result: **195 passing, 31 skipped, 0 failing.**
 
 ## The two kinds of test
 
@@ -33,6 +33,12 @@ They are the majority of the suite and the ones that protect the design.
 | `AuditInterceptor` | Creates, updates and deletes are recorded with user, timestamp, field, old value and new value; unchanged fields are not logged; the audit trail does not audit itself |
 | `PeriodLockInterceptor` | A locked period cannot be modified or deleted **at the data layer**; the record is unchanged after a rejected write; an authorised reopen requires a reason and works only inside its scope |
 | Migration and seeding | The documented tables are created; seeding is idempotent; decimals round-trip exactly through scaled-integer storage |
+| `PasswordHasher` | The hash never contains the password; the same password hashes differently each time; malformed stored hashes fail closed; weak iteration counts are refused and flagged for upgrade |
+| `AuthenticationService` | Correct credentials return the user's roles and permissions; an unknown user and a wrong password give the **same** message, so the form cannot enumerate accounts; repeated failures lock the account; every attempt is recorded |
+| Segregation of duties | `Payroll.Calculate` and `Payroll.Approve` cannot be held by one role; the shipped Payroll Officer cannot approve and the shipped Manager cannot calculate; disabling the check is deliberate and audited |
+| `EmployeeService` | Duplicate employee numbers and national IDs are refused; leaving is a status change, never a delete; every status change is recorded; permissions are enforced |
+| `EmployeeContractService` | **A salary change creates a new version and preserves the old one**; the contract applying on a past date is still resolvable; only one contract is ever current; superseding requires a reason and cannot be backdated before the version it replaces |
+| Employee validation | Required fields, negative salary, end-before-start dates, missing currency, missing rate for the earnings basis, bank versus mobile-money requirements, percentage allocation bounds |
 
 ### Statutory seed tests — against clearly labelled temporary rules
 
@@ -60,6 +66,11 @@ Seeding itself is also asserted honestly:
 - `Nssa_seed_leaves_the_ceiling_application_undetermined` (Q22)
 - `Conflicting_medical_credit_is_seeded_inactive_with_no_percentage` (Q24)
 - `Sdf_levy_is_seeded_inactive_because_liability_is_unestablished`
+- `Every_earning_and_deduction_type_records_its_treatment_grade_and_source` — the statutory
+  treatment of an allowance is graded and sourced exactly like a tax table (ADR-021)
+- `Overtime_is_taxable_but_excluded_from_nssa` — the seeded treatment matching §14 of the spec
+- `Every_employment_type_has_a_matching_nssa_eligibility_rule` — coverage can never fall back to
+  an assumption
 
 ## The 34 compliance cases
 
@@ -97,6 +108,10 @@ and refuses to produce a live payroll until they are verified.
 
 ## What is not tested
 
-- **The desktop shell.** It targets `net8.0-windows` and has never been compiled; this environment
-  is Linux. Treat it as untested code until it builds on Windows.
+- **Screen behaviour.** Every Razor component now compiles and is type-checked on each build
+  (ADR-019), which catches a large class of mistakes, but no screen has been rendered or clicked.
+  Data binding, navigation and form round-trips are unverified. Component tests using bUnit are
+  proposed for Milestone 3.
+- **The WPF host.** It targets `net8.0-windows` and has never been compiled here. It is now thin —
+  a window, a WebView and startup wiring — so the untested surface is small.
 - **Payroll calculation.** None exists yet.

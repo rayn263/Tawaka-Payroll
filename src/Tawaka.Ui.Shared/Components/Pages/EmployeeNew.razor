@@ -1,0 +1,253 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/employees/new"
+@inject EmployeeService EmployeeService
+@inject EmployeeContractService ContractService
+@inject PayrollDbContext Db
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <h1>Add employee</h1>
+    <a class="btn btn-quiet" href="employees">Cancel</a>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+<div class="card">
+    <h2>Personal</h2>
+    <div class="form-grid">
+        <div><label>Employee number *</label><input @bind="_employee.EmployeeNumber" /></div>
+        <div><label>First name *</label><input @bind="_employee.FirstName" /></div>
+        <div><label>Last name *</label><input @bind="_employee.LastName" /></div>
+        <div><label>National ID</label><input @bind="_employee.NationalId" placeholder="63-1234567 X 42" /></div>
+        <div><label>Date of birth</label><input type="date" @bind="_dateOfBirth" /></div>
+        <div>
+            <label>Gender</label>
+            <select @bind="_employee.Gender">
+                @foreach (var gender in Enum.GetValues<Gender>())
+                {
+                    <option value="@gender">@gender</option>
+                }
+            </select>
+        </div>
+        <div><label>Phone</label><input @bind="_employee.Phone" /></div>
+        <div><label>Email</label><input @bind="_employee.Email" /></div>
+        <div><label>Address</label><input @bind="_employee.AddressLine1" /></div>
+        <div><label>City</label><input @bind="_employee.City" /></div>
+        <div><label>Engagement date *</label><input type="date" @bind="_hireDate" /></div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Contract</h2>
+    <p class="muted">
+        The first contract version. Later changes create a new version; this one is never
+        overwritten.
+    </p>
+    <div class="form-grid">
+        <div>
+            <label>Employment type *</label>
+            <select @bind="_employmentTypeId" @bind:after="ApplyTypeDefaults">
+                <option value="">Select…</option>
+                @foreach (var type in _employmentTypes)
+                {
+                    <option value="@type.Id">@type.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Payroll currency *</label>
+            <select @bind="_contract.PayrollCurrency">
+                @foreach (var currency in _currencies)
+                {
+                    <option value="@currency.Code">@currency.DisplayCode — @currency.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Payment frequency *</label>
+            <select @bind="_contract.PaymentFrequency">
+                @foreach (var frequency in Enum.GetValues<PaymentFrequency>())
+                {
+                    <option value="@frequency">@frequency</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Earnings basis *</label>
+            <select @bind="_contract.EarningsBasis">
+                @foreach (var basis in Enum.GetValues<EarningsBasis>())
+                {
+                    <option value="@basis">@basis</option>
+                }
+            </select>
+        </div>
+        <div><label>Monthly rate</label><input type="number" step="0.01" @bind="_contract.MonthlyRate" /></div>
+        <div><label>Daily rate</label><input type="number" step="0.01" @bind="_contract.DailyRate" /></div>
+        <div><label>Hourly rate</label><input type="number" step="0.01" @bind="_contract.HourlyRate" /></div>
+        <div><label>Contract end date @(RequiresEndDate ? "*" : "")</label>
+            <input type="date" @bind="_contractEndDate" /></div>
+        <div>
+            <label>Job title</label>
+            <select @bind="_jobTitleId">
+                <option value="">—</option>
+                @foreach (var title in _jobTitles)
+                {
+                    <option value="@title.Id">@title.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Department</label>
+            <select @bind="_departmentId">
+                <option value="">—</option>
+                @foreach (var department in _departments)
+                {
+                    <option value="@department.Id">@department.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Location</label>
+            <select @bind="_locationId">
+                <option value="">—</option>
+                @foreach (var location in _locations)
+                {
+                    <option value="@location.Id">@location.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label>Project</label>
+            <select @bind="_projectId">
+                <option value="">—</option>
+                @foreach (var project in _projects)
+                {
+                    <option value="@project.Id">@project.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="form-actions">
+    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_busy">Save employee</button>
+</div>
+
+@code {
+    private readonly Employee _employee = new() { Status = EmployeeStatus.Active };
+    private readonly EmployeeContract _contract = new()
+    {
+        PayrollCurrency = "USD",
+        PaymentFrequency = PaymentFrequency.Monthly,
+        EarningsBasis = EarningsBasis.MonthlySalary,
+        StandardHoursPerDay = 8m,
+        StandardDaysPerWeek = 5m
+    };
+
+    private DateTime? _dateOfBirth;
+    private DateTime _hireDate = DateTime.Today;
+    private DateTime? _contractEndDate;
+    private string _employmentTypeId = string.Empty;
+    private string _jobTitleId = string.Empty;
+    private string _departmentId = string.Empty;
+    private string _locationId = string.Empty;
+    private string _projectId = string.Empty;
+
+    private ValidationResult? _validation;
+    private bool _busy;
+    private Guid _companyId;
+
+    private List<EmploymentType> _employmentTypes = new();
+    private List<JobTitle> _jobTitles = new();
+    private List<Department> _departments = new();
+    private List<Location> _locations = new();
+    private List<Project> _projects = new();
+    private List<Domain.Currencies.Currency> _currencies = new();
+
+    private bool RequiresEndDate =>
+        Guid.TryParse(_employmentTypeId, out var id) &&
+        _employmentTypes.FirstOrDefault(t => t.Id == id)?.RequiresContractEndDate == true;
+
+    protected override void OnInitialized()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _employmentTypes = Db.EmploymentTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _companyId && t.IsActive)
+            .OrderBy(t => t.DisplayOrder).ToList();
+        _jobTitles = Db.JobTitles.AsNoTracking().Where(j => j.CompanyId == _companyId && j.IsActive)
+            .OrderBy(j => j.Name).ToList();
+        _departments = Db.Departments.AsNoTracking().Where(d => d.CompanyId == _companyId && d.IsActive)
+            .OrderBy(d => d.Name).ToList();
+        _locations = Db.Locations.AsNoTracking().Where(l => l.CompanyId == _companyId && l.IsActive)
+            .OrderBy(l => l.Name).ToList();
+        _projects = Db.Projects.AsNoTracking().Where(p => p.CompanyId == _companyId && p.IsActive)
+            .OrderBy(p => p.Name).ToList();
+        _currencies = Db.Currencies.AsNoTracking().Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder).ToList();
+    }
+
+    /// <summary>Applying the type's defaults saves re-entering what the category already implies.</summary>
+    private void ApplyTypeDefaults()
+    {
+        if (!Guid.TryParse(_employmentTypeId, out var id))
+        {
+            return;
+        }
+
+        var type = _employmentTypes.FirstOrDefault(t => t.Id == id);
+        if (type is null)
+        {
+            return;
+        }
+
+        _contract.PaymentFrequency = type.DefaultPaymentFrequency;
+        _contract.EarningsBasis = type.DefaultEarningsBasis;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            _employee.CompanyId = _companyId;
+            _employee.HireDate = DateOnly.FromDateTime(_hireDate);
+            _employee.DateOfBirth = _dateOfBirth is null
+                ? null
+                : DateOnly.FromDateTime(_dateOfBirth.Value);
+
+            var created = await EmployeeService.CreateAsync(_employee);
+            if (!created.Succeeded)
+            {
+                _validation = created.Validation;
+                return;
+            }
+
+            _contract.CompanyId = _companyId;
+            _contract.EmployeeId = created.Value!.Id;
+            _contract.StartDate = _employee.HireDate;
+            _contract.EndDate = _contractEndDate is null
+                ? null
+                : DateOnly.FromDateTime(_contractEndDate.Value);
+            _contract.EmploymentTypeId = Guid.TryParse(_employmentTypeId, out var typeId)
+                ? typeId
+                : Guid.Empty;
+            _contract.JobTitleId = Guid.TryParse(_jobTitleId, out var jobTitleId) ? jobTitleId : null;
+            _contract.DepartmentId = Guid.TryParse(_departmentId, out var departmentId) ? departmentId : null;
+            _contract.LocationId = Guid.TryParse(_locationId, out var locationId) ? locationId : null;
+            _contract.ProjectId = Guid.TryParse(_projectId, out var projectId) ? projectId : null;
+
+            var contract = await ContractService.CreateInitialAsync(_contract);
+            if (!contract.Succeeded)
+            {
+                _validation = contract.Validation;
+                return;
+            }
+
+            Nav.NavigateTo($"employees/{created.Value.Id}");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

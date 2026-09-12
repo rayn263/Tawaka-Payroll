@@ -1,0 +1,132 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@inject AuthenticationService Auth
+@inject UserSession Session
+
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-brand">
+            <span class="brand-mark">T</span>
+            <div>
+                <div class="login-title">Tawaka Payroll</div>
+                <div class="login-subtitle">Zimbabwe payroll management</div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-error">@_error</div>
+        }
+
+        @if (_mustChangePassword)
+        {
+            <p class="muted">Your password must be changed before you can continue.</p>
+            <label>Current password</label>
+            <input type="password" @bind="_password" />
+            <label>New password</label>
+            <input type="password" @bind="_newPassword" />
+            <label>Confirm new password</label>
+            <input type="password" @bind="_confirmPassword" />
+            <button class="btn btn-primary" @onclick="ChangePasswordAsync" disabled="@_busy">
+                Change password and sign in
+            </button>
+        }
+        else
+        {
+            <label>Username</label>
+            <input @bind="_username" @onkeydown="OnKeyDown" />
+            <label>Password</label>
+            <input type="password" @bind="_password" @onkeydown="OnKeyDown" />
+            <button class="btn btn-primary" @onclick="SignInAsync" disabled="@_busy">Sign in</button>
+        }
+
+        <p class="login-footnote">
+            All sign-in attempts are recorded. Payroll actions are attributed to the signed-in user.
+        </p>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnSignedIn { get; set; }
+
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string? _error;
+    private bool _busy;
+    private bool _mustChangePassword;
+    private Guid _pendingUserId;
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await SignInAsync();
+        }
+    }
+
+    private async Task SignInAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var result = await Auth.AuthenticateAsync(_username, _password, Environment.MachineName);
+
+            if (result.Outcome == AuthenticationOutcome.PasswordChangeRequired)
+            {
+                _mustChangePassword = true;
+                _pendingUserId = result.User!.UserId;
+                return;
+            }
+
+            if (!result.Succeeded)
+            {
+                _error = result.Message;
+                _password = string.Empty;
+                return;
+            }
+
+            Session.SignIn(result.User!);
+            await OnSignedIn.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _error = null;
+
+        if (_newPassword != _confirmPassword)
+        {
+            _error = "The new passwords do not match.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var validation = await Auth.ChangePasswordAsync(_pendingUserId, _password, _newPassword);
+            if (!validation.IsValid)
+            {
+                _error = string.Join(" ", validation.Errors.Select(e => e.Message));
+                return;
+            }
+
+            var result = await Auth.AuthenticateAsync(_username, _newPassword, Environment.MachineName);
+            if (result.Succeeded)
+            {
+                Session.SignIn(result.User!);
+                await OnSignedIn.InvokeAsync();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

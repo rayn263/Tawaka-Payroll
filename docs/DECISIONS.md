@@ -157,3 +157,43 @@ advisor sign-off (Q1) is another.
 compliance question, even when the rule is marked Verified.
 **Consequences:** Verification cannot be used to wave through a rule whose application method is
 still unknown.
+
+### ADR-019 — Screens live in a Razor class library, not in the Windows host
+**Status:** Accepted (Milestone 2)
+**Context:** Putting screens in the WPF project made the entire user interface uncompilable and
+unverifiable outside Windows, which is how Milestone 1 shipped a UI scaffold nobody could build.
+**Decision:** All Razor components live in `Tawaka.Ui.Shared`, a Razor class library targeting
+`net8.0`. `Tawaka.Ui.Desktop` is reduced to a host: a window, a `BlazorWebView` and startup wiring.
+**Consequences:** The whole UI compiles and is verified on any platform and in CI; only the thin
+host remains Windows-only. It also makes the Phase 3 web version a hosting change rather than a
+rewrite, since the same components can be served by ASP.NET Core.
+
+### ADR-020 — The application layer works against DbSets, not a repository per entity
+**Status:** Accepted (Milestone 2)
+**Context:** A repository and unit-of-work wrapper for ~30 entities would add several thousand
+lines of pass-through code for no behavioural gain.
+**Decision:** `IPayrollDataContext` in the application layer exposes EF Core `DbSet`s;
+`PayrollDbContext` implements it. The application layer still knows nothing about SQLite,
+connection strings, migrations or interceptors.
+**Consequences:** Far less ceremony, and services remain testable against a real SQLite database.
+The boundary that actually matters is untouched: `Tawaka.Payroll.Engine` still has no data access
+at all (ADR-005).
+
+### ADR-021 — Statutory treatment of earnings and deductions is graded like a statutory rule
+**Status:** Accepted (Milestone 2)
+**Context:** Whether a housing allowance is taxable or NSSA-applicable is as much a statutory
+question as a tax bracket, and the evidence for it is just as uneven.
+**Decision:** `EarningType` and `DeductionType` carry `TreatmentVerificationStatus`,
+`TreatmentSource` and `TreatmentNotes`. An assumed treatment is visible, and will block live
+payroll in the same way an unverified tax table does.
+**Consequences:** "Is this allowance taxable?" is always answerable with a source and a confidence,
+rather than being an invisible assumption inside the calculation engine.
+
+### ADR-022 — The first administrator password is generated, never defaulted
+**Status:** Accepted (Milestone 2)
+**Context:** A shipped default password is a shipped vulnerability.
+**Decision:** First-run seeding creates `admin` with a randomly generated 16-character password,
+returned to the caller exactly once for display, stored only as a PBKDF2 hash, with
+`MustChangePassword` set.
+**Consequences:** No known-credential window. The password cannot be recovered if lost at first
+run — the account must be reset instead, which is the correct trade.

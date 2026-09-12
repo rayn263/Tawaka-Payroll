@@ -18,6 +18,9 @@ public enum SettingCategory
 /// </summary>
 public class AppSetting : AuditableEntity
 {
+    /// <summary>Null for a system-wide setting; set for a company-specific one.</summary>
+    public Guid? CompanyId { get; set; }
+
     public string Key { get; set; } = string.Empty;
     public string? Value { get; set; }
     public string DataType { get; set; } = "string";

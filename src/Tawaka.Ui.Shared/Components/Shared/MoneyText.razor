@@ -1,0 +1,24 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+
+@* Every financial figure carries its currency. There are no bare "$" amounts in this system. *@
+
+<span class="money">@Formatted</span>
+
+@code {
+    [Parameter] public decimal? Amount { get; set; }
+    [Parameter] public string? Currency { get; set; }
+
+    private string Formatted
+    {
+        get
+        {
+            if (Amount is null || string.IsNullOrWhiteSpace(Currency))
+            {
+                return "—";
+            }
+
+            var label = Currency.Equals("ZWG", StringComparison.OrdinalIgnoreCase) ? "ZiG" : Currency;
+            return $"{label} {Amount.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)}";
+        }
+    }
+}

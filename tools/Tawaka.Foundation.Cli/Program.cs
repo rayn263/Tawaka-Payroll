@@ -35,9 +35,18 @@ Console.WriteLine();
 await context.Database.MigrateAsync();
 Console.WriteLine($"Migrations applied: {string.Join(", ", await context.Database.GetAppliedMigrationsAsync())}");
 
-await scope.ServiceProvider.GetRequiredService<StatutoryRuleSeeder>().SeedAsync();
+var seedOutcome = await scope.ServiceProvider.GetRequiredService<ApplicationSeeder>().SeedAsync();
 
 var currencies = await context.Currencies.AsNoTracking().OrderBy(c => c.SortOrder).ToListAsync();
+Console.WriteLine($"Company:             {seedOutcome.Company.DisplayName}");
+Console.WriteLine($"Employment types:    {await context.EmploymentTypes.CountAsync()}");
+Console.WriteLine($"Earning types:       {await context.EarningTypes.CountAsync()}");
+Console.WriteLine($"Deduction types:     {await context.DeductionTypes.CountAsync()}");
+Console.WriteLine($"Roles / permissions: {await context.Roles.CountAsync()} / {await context.Permissions.CountAsync()}");
+if (seedOutcome.Security.AdministratorCreated)
+{
+    Console.WriteLine($"Administrator:       admin / {seedOutcome.Security.GeneratedPassword}  (must be changed at first sign-in)");
+}
 Console.WriteLine($"Currencies:          {string.Join(", ", currencies.Select(c => $"{c.Code} ({c.DisplayCode})"))}");
 Console.WriteLine($"Settings:            {await context.AppSettings.CountAsync()}");
 Console.WriteLine($"Audit entries:       {await context.AuditLogs.CountAsync()}");

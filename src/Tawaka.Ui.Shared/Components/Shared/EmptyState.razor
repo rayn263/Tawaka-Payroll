@@ -1,0 +1,18 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+
+@* An honest empty state: says what is missing and what to do, never fabricates sample data. *@
+
+<div class="empty-state">
+    <div class="empty-title">@Title</div>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <div class="empty-description">@Description</div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Nothing to show yet";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

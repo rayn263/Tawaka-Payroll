@@ -1,0 +1,21 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+
+@* Shows every validation failure at once, so a form is corrected in one pass. *@
+
+@if (Result is { IsValid: false })
+{
+    <div class="alert alert-error">
+        <strong>@Title</strong>
+        <ul>
+            @foreach (var error in Result.Errors)
+            {
+                <li>@error.Message</li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public ValidationResult? Result { get; set; }
+    [Parameter] public string Title { get; set; } = "Please correct the following:";
+}

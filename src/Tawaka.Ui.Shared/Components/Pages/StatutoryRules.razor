@@ -1,0 +1,127 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/statutory"
+@inject PayrollDbContext Db
+@inject LivePayrollGate Gate
+@inject UserSession Session
+
+<h1>Statutory rules</h1>
+<p class="muted">
+    Every statutory value used by this system is a dated, sourced rule. Live payroll resolves only
+    rules marked Verified; nothing falls back to a default.
+</p>
+
+@if (_report is { IsBlocked: true })
+{
+    <div class="alert alert-error blocked">
+        <h2>@LivePayrollBlockReport.Headline</h2>
+        <p>@LivePayrollBlockReport.Summary</p>
+        <ol>
+            @foreach (var rule in _report.BlockingRules)
+            {
+                <li>
+                    <strong>@(rule.RuleId ?? rule.Description)</strong>
+                    @if (!string.IsNullOrWhiteSpace(rule.RuleName))
+                    {
+                        <text> — @rule.RuleName</text>
+                    }
+                    <div class="muted">@rule.Reason</div>
+                    @if (!string.IsNullOrWhiteSpace(rule.Remedy))
+                    {
+                        <div class="remedy">To clear: @rule.Remedy</div>
+                    }
+                </li>
+            }
+        </ol>
+    </div>
+}
+else
+{
+    <div class="alert alert-success">
+        Every statutory rule required for a monthly USD payroll is verified.
+    </div>
+}
+
+<div class="stat-row">
+    <div class="stat"><div class="stat-value">@_counts.GetValueOrDefault(VerificationStatus.Verified)</div><div class="stat-label">Verified</div></div>
+    <div class="stat"><div class="stat-value">@_counts.GetValueOrDefault(VerificationStatus.Supported)</div><div class="stat-label">Supported</div></div>
+    <div class="stat"><div class="stat-value">@_counts.GetValueOrDefault(VerificationStatus.Unverified)</div><div class="stat-label">Unverified</div></div>
+    <div class="stat"><div class="stat-value">@_counts.GetValueOrDefault(VerificationStatus.Disabled)</div><div class="stat-label">Disabled</div></div>
+</div>
+
+<div class="card">
+    <table class="data">
+        <thead>
+        <tr>
+            <th>Rule ID</th><th>Name</th><th>Currency</th><th>Effective from</th>
+            <th>Effective to</th><th>Status</th><th>Source</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var rule in _rules)
+        {
+            <tr class="@(rule.IsActive ? null : "inactive")">
+                <td class="mono">@rule.RuleId</td>
+                <td>
+                    @rule.Name
+                    @if (!rule.IsActive)
+                    {
+                        <span class="muted"> (inactive)</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(rule.Notes))
+                    {
+                        <div class="muted small">@rule.Notes</div>
+                    }
+                </td>
+                <td>@(rule.Currency is null ? "—" : rule.Currency == "ZWG" ? "ZiG" : rule.Currency)</td>
+                <td>@rule.EffectiveFrom.ToString("dd MMM yyyy")</td>
+                <td>@(rule.EffectiveTo?.ToString("dd MMM yyyy") ?? "open")</td>
+                <td><StatusBadge Verification="rule.VerificationStatus" /></td>
+                <td class="muted small">@rule.Source?.Source</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+
+@if (Session.HasPermission(Permissions.StatutoryVerifyRules))
+{
+    <p class="muted">
+        Verification is a deliberate act: confirm the rule against its official source, record the
+        document and date, then set it to Verified. Marking a rule verified to unblock a screen
+        defeats the point of the gate.
+    </p>
+}
+
+@code {
+    private List<StatutoryRule> _rules = new();
+    private Dictionary<VerificationStatus, int> _counts = new();
+    private LivePayrollBlockReport? _report;
+
+    protected override void OnInitialized()
+    {
+        _rules = Db.StatutoryRules.AsNoTracking().OrderBy(r => r.RuleId).ToList();
+        _counts = _rules.GroupBy(r => r.VerificationStatus)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var payDate = DateOnly.FromDateTime(DateTime.Today);
+        _report = Gate.Check(new[]
+        {
+            new StatutoryRuleQuery
+            {
+                RuleType = StatutoryRuleType.PayeTable, EffectiveDate = payDate,
+                Currency = CurrencyCode.Usd, PeriodBasis = PeriodBasis.Monthly
+            },
+            new StatutoryRuleQuery
+            {
+                RuleType = StatutoryRuleType.NssaPobs, EffectiveDate = payDate,
+                Currency = CurrencyCode.Usd
+            },
+            new StatutoryRuleQuery { RuleType = StatutoryRuleType.AidsLevy, EffectiveDate = payDate },
+            new StatutoryRuleQuery
+            {
+                RuleType = StatutoryRuleType.Apwcs, EffectiveDate = payDate,
+                Currency = CurrencyCode.Usd
+            }
+        });
+    }
+}

@@ -17,11 +17,23 @@ public sealed class FixedClock : IClock
 
 public sealed class TestUser : ICurrentUser
 {
+    private readonly HashSet<string>? _permissions;
+
     public TestUser(string userId = "u-payroll", string userName = "R. Nyakuhwa")
     {
         UserId = userId;
         UserName = userName;
     }
+
+    private TestUser(string userId, string userName, IEnumerable<string> permissions)
+        : this(userId, userName)
+    {
+        _permissions = permissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A user holding only the named permissions, for testing permission enforcement.</summary>
+    public static TestUser WithPermissions(params string[] permissions) =>
+        new("u-limited", "Limited User", permissions);
 
     public string UserId { get; }
 
@@ -29,7 +41,9 @@ public sealed class TestUser : ICurrentUser
 
     public string? Machine => "TEST";
 
-    public bool HasPermission(string permissionCode) => true;
+    /// <summary>Holds every permission unless a specific set was supplied.</summary>
+    public bool HasPermission(string permissionCode) =>
+        _permissions is null || _permissions.Contains(permissionCode);
 }
 
 /// <summary>
@@ -83,6 +97,19 @@ public sealed class TestDatabase : IDisposable
     }
 
     public IReadOnlyList<StatutoryRule> AllRules() => Context.StatutoryRules.AsNoTracking().ToList();
+
+    public Tawaka.Application.Security.PasswordHasher Hasher { get; } =
+        new(iterations: 15_000);
+
+    /// <summary>Runs first-run seeding: statutory rules, the company, and security.</summary>
+    public async Task<Tawaka.Infrastructure.Seeding.SeedOutcome> SeedAllAsync()
+    {
+        var statutory = new Tawaka.Infrastructure.Seeding.StatutoryRuleSeeder(Context);
+        var company = new Tawaka.Infrastructure.Seeding.CompanySeeder(Context);
+        var security = new Tawaka.Infrastructure.Seeding.SecuritySeeder(Context, Hasher);
+        var seeder = new Tawaka.Infrastructure.Seeding.ApplicationSeeder(statutory, company, security);
+        return await seeder.SeedAsync();
+    }
 
     public void Dispose()
     {

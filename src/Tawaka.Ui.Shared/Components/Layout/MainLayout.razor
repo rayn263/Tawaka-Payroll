@@ -1,0 +1,46 @@
+@namespace Tawaka.Ui.Shared.Components.Layout
+@inherits LayoutComponentBase
+@inject UserSession Session
+@inject AuthenticationService Auth
+
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand">
+            <span class="brand-mark">T</span>
+            <span class="brand-name">TAWAKA<br /><small>PAYROLL</small></span>
+        </div>
+        <NavMenu />
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-company">@CompanyName</div>
+            <div class="topbar-right">
+                <ModeBadge />
+                <div class="user">
+                    <div class="user-name">@Session.UserName</div>
+                    <div class="user-role">@string.Join(", ", Session.User?.Roles ?? new List<string>())</div>
+                </div>
+                <button class="btn btn-quiet" @onclick="SignOutAsync">Sign out</button>
+            </div>
+        </header>
+        <main class="content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string CompanyName { get; set; } = "Tawaka Payroll";
+
+    private async Task SignOutAsync()
+    {
+        var user = Session.User;
+        if (user is not null)
+        {
+            await Auth.RecordLogoutAsync(user.UserId, user.FullName, Environment.MachineName);
+        }
+
+        Session.SignOut();
+    }
+}
