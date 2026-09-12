@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+
+# Databases and backups (never commit payroll data)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.mdf
+*.ldf
+backups/
+
+# Generated documents (contain employee data)
+payslips/
+exports/
+logs/
+*.log
+
+# Secrets
+appsettings.*.local.json
+secrets.json
+*.pfx
