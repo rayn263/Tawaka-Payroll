@@ -53,6 +53,25 @@ public class PayrollDbContext : DbContext, IPayrollDataContext
 
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
+    // ---- Payroll runs ----------------------------------------------------------------------
+
+    public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
+
+    public DbSet<PayrollRunEmployee> PayrollRunEmployees => Set<PayrollRunEmployee>();
+
+    public DbSet<PayrollEarningLine> PayrollEarningLines => Set<PayrollEarningLine>();
+
+    public DbSet<PayrollDeductionLine> PayrollDeductionLines => Set<PayrollDeductionLine>();
+
+    public DbSet<PayrollEmployerCostLine> PayrollEmployerCostLines => Set<PayrollEmployerCostLine>();
+
+    public DbSet<PayrollCalculationTraceEntry> PayrollCalculationTraces =>
+        Set<PayrollCalculationTraceEntry>();
+
+    public DbSet<PayrollUnresolvedItem> PayrollUnresolvedItems => Set<PayrollUnresolvedItem>();
+
+    public DbSet<PayrollCostAllocation> PayrollCostAllocations => Set<PayrollCostAllocation>();
+
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // ---- Company ---------------------------------------------------------------------------

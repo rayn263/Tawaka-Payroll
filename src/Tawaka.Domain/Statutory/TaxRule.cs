@@ -12,6 +12,13 @@ public class TaxRule : StatutoryRule
 
     public PeriodBasis PeriodBasis { get; set; }
 
+    /// <summary>
+    /// Which form this table is expressed in. Seeded tables use the progressive ladder because the
+    /// official fixed-deduction column has not been obtained (compliance spec Q26); switching to
+    /// the published form without that column makes the engine refuse rather than approximate.
+    /// </summary>
+    public TaxBracketApplication BracketApplication { get; set; } = TaxBracketApplication.ProgressiveLadder;
+
     public ICollection<TaxBracket> Brackets { get; set; } = new List<TaxBracket>();
 
     /// <summary>Brackets in ascending order of lower bound.</summary>

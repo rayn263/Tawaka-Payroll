@@ -1,7 +1,7 @@
 # ZIMBABWE PAYROLL COMPLIANCE SPECIFICATION v1.0
 
 **Status:** DRAFT — awaiting approval. Not yet authoritative.
-**Research date:** 12 September 2026
+**Research date:** 12 September 2026 · **Revised:** 13 September 2026 (Milestone 3 research round)
 **Scope:** Statutory basis for the Tawaka Payroll calculation engine.
 **Supersedes:** the compliance section of `docs/COMPLIANCE_ZIMBABWE.md` (that document remains as
 the architectural risk register; this document governs calculation).
@@ -124,6 +124,13 @@ thus"* — consistent with a rate-and-deduction layout.
 
 **Rule ID `PAYE-USD-2026`. Grade: 🔴 overall**, because a table missing its deduction column is
 not a usable table. This is the single highest-value verification item.
+
+**Implementation note (Milestone 3).** The engine supports both table forms via
+`TaxRule.BracketApplication`. Seeded tables use `ProgressiveLadder`, which the bands as published
+describe and which needs no deduction column. Switching a table to `RateLessFixedDeduction` without
+its "less" column makes the engine refuse with `PAYE_FIXED_DEDUCTION_UNRESOLVED`, rather than
+silently falling back to the ladder — so Q26 cannot be quietly bypassed once the official form is
+adopted.
 
 ### 1.4 ZiG (ZWG) remuneration — tax year 2026
 
@@ -254,6 +261,12 @@ that changes with a currency reform.
    point of aggregating), or once per currency stream?
 4. **Credit handling:** credits are denominated in USD 75/month; against an aggregated base, are
    they applied once in the tax-base currency?
+
+### 2.3a Implementation note (Milestone 3)
+
+The engine implements the strategy as a dated rule. Where an employee's earnings are in more than
+one currency and no approved strategy exists, it emits `CURRENCY_STRATEGY_UNRESOLVED` naming Q1 and
+produces no figure. Single-currency employees — the overwhelming majority — are unaffected.
 
 ### 2.4 Recommended interpretation (for approval, not for silent adoption)
 
@@ -404,14 +417,21 @@ and unverified rows block live payroll for employees of that type only, not the 
 | Item | Finding |
 |---|---|
 | Is the ceiling monthly? | Yes — USD 700 **per month** 🟡 |
-| Weekly application | 🔴 **UNVERIFIED.** No evidence on whether the ceiling is pro-rated per week, applied monthly across weekly runs, or applied per run |
+| Weekly application | 🔴 **UNVERIFIED, but advanced.** A professional source states that "for weekly paid employees, the maximum insurable earnings would be calculated on a **pro-rata basis**" — the first direct evidence on this point. Single source, so still 🔴, but it is now a specific claim to verify rather than an open question with three equal candidates |
 | Fortnightly application | 🔴 **UNVERIFIED** |
 | 18-day casual test | Expressed in days per **month**; how it applies across weekly runs is 🔴 |
 
 Three candidate methods (pro-rate the ceiling by period length; accumulate within the calendar
 month and cap at 700; apply 700 per run) give materially different answers, and applying 700 per
-weekly run would understate contributions roughly four-fold. `NssaRules.CeilingPeriodBasis` holds
-the choice; seeded 🔴. **New blocking question Q22.**
+weekly run would understate contributions roughly four-fold. `NssaRules.CeilingApplication` holds
+the choice; seeded `NotDetermined`, which makes the engine refuse rather than guess. **Q22 remains
+open, with pro-rata now the recommended answer to verify.**
+
+**Implementation note (Milestone 3).** The engine implements all three methods and selects on the
+configured rule. Where the ceiling's period basis matches the payroll's, no conversion rule is
+needed and the calculation proceeds — so monthly payroll is unaffected by Q22. Where they differ
+and the method is `NotDetermined`, the engine emits `NSSA_CEILING_APPLICATION_UNRESOLVED` and
+leaves the figure absent. Verified pro-rata factors: weekly 12/52, fortnightly 12/26.
 
 ---
 
@@ -1011,6 +1031,20 @@ unlocks for that calendar.
 
 ---
 
+## 26a. VERIFICATION STATUS IS NOT IMPLEMENTATION STATUS
+
+Milestone 3 implemented the calculation engine. **No rule was upgraded as a result.** The engine
+supporting a rule says nothing about whether that rule is correct; the two are tracked separately
+and always will be:
+
+| | Meaning | Changed by |
+|---|---|---|
+| **Implementation status** | The engine can apply this kind of rule | Writing code |
+| **Verification status** | This rule's values match the official source | Reading the official document |
+
+The seed rules remain 🟡 and 🔴 exactly as recorded above. The engine calculates with them only in
+development mode, and every output is watermarked.
+
 ## 27. IMPLEMENTATION RULE (ADR-012)
 
 Adopted verbatim from your §26:
@@ -1026,7 +1060,9 @@ Concretely, the engine:
 - **never** reclassifies an employee's employment type;
 - **never** marks a statutory amount paid without a payment record;
 - **always** records which rule version, exchange rate and strategy produced every figure;
-- **always** says, in plain words, what is unverified and what must be done about it.
+- **always** says, in plain words, what is unverified and what must be done about it;
+- **never** substitutes 0.00 for an unavailable rule — an unresolved figure is absent and carries
+  its reason, while a legitimate zero is a real calculated 0.00 (Milestone 3, §13).
 
 ---
 

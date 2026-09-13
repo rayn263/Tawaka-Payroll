@@ -22,11 +22,8 @@ namespace Tawaka.Payroll.Engine.Tests;
 /// </summary>
 public class ComplianceTestCatalogue
 {
-    private const string NeedsEngine =
-        "Pending Milestone 3 (calculation engine). Expected values recorded in SeedExpectations.";
-
     private const string NeedsEmployees =
-        "Pending Milestone 2 (employee and contract model).";
+        "Pending: needs the loans and advances module (Milestone 5).";
 
     private const string NeedsObligations =
         "Pending Milestone 4 (statutory obligation register).";
@@ -118,44 +115,33 @@ public class ComplianceTestCatalogue
         Assert.False(resolution.Succeeded);
     }
 
-    // ---- Pending: statutory seed arithmetic (needs the calculation engine) -------------------
+    // ---- Implemented elsewhere ---------------------------------------------------------------
+    //
+    // Milestone 3 activated most of the catalogue against the real engine. Rather than duplicate
+    // the assertions here, each case is listed with where it now lives:
+    //
+    //   PayrollCalculationTests      TC-01 TC-02 TC-03 TC-04 TC-05 TC-06 TC-09 TC-10 TC-11
+    //                                TC-12 TC-13 TC-14 TC-14b TC-15 TC-19 TC-21 TC-22 TC-23
+    //   UnresolvedRuleTests          TC-07 TC-08 TC-16 TC-17 TC-34
+    //   InvariantTests               TC-24 TC-26, plus the financial invariants
+    //   PayrollRunTests (infra)      TC-25 TC-27 TC-30, historical contract and tax-rule
+    //                                reproducibility, and the approval gates
+    //   PeriodLockTests (infra)      TC-30
 
-    [Fact(Skip = NeedsEngine)] public void TC_01_Usd_permanent_employee() { }
-    [Fact(Skip = NeedsEngine)] public void TC_02_Zig_permanent_employee() { }
-    [Fact(Skip = NeedsEngine)] public void TC_03_Usd_below_threshold() { }
-    [Fact(Skip = NeedsEngine)] public void TC_04_Zig_below_threshold() { }
-    [Fact(Skip = NeedsEngine)] public void TC_05_High_income_usd() { }
-    [Fact(Skip = NeedsEngine)] public void TC_06_High_income_zig() { }
-    [Fact(Skip = NeedsEngine)] public void TC_09_Overtime_excluded_from_nssa() { }
-    [Fact(Skip = NeedsEngine)] public void TC_10_Annual_bonus_exemption() { }
-    [Fact(Skip = NeedsEngine)] public void TC_11_Mixed_allowances_with_reimbursement() { }
-    [Fact(Skip = NeedsEngine)] public void TC_12_Nssa_below_ceiling() { }
-    [Fact(Skip = NeedsEngine)] public void TC_13_Nssa_ceiling_exceeded() { }
-    [Fact(Skip = NeedsEngine)] public void TC_21_Elderly_tax_credit_reduces_aids_levy() { }
-    [Fact(Skip = NeedsEngine)] public void TC_22_Zero_paye_still_shows_on_payslip() { }
-    [Fact(Skip = NeedsEngine)] public void TC_23_Zero_nssa_for_employee_over_65() { }
+    // ---- Still pending -----------------------------------------------------------------------
 
-    // ---- Pending: multi-currency (needs the engine and an approved strategy) -----------------
+    /// <summary>
+    /// TC-18: whether a part-timer's NSSA ceiling is pro-rated by hours is not established. The
+    /// engine pro-rates by <em>period length</em> only; an FTE-based pro-ration would need a rule
+    /// that does not exist yet.
+    /// </summary>
+    [Fact(Skip = "Pending compliance question Q4a/Q22: FTE-based ceiling treatment is unestablished.")]
+    public void TC_18_Part_time_ceiling_treatment() { }
 
-    [Fact(Skip = NeedsEngine)] public void TC_07_Usd_salary_plus_zig_allowance_is_blocked_in_live_mode() { }
-    [Fact(Skip = NeedsEngine)] public void TC_08_Zig_salary_plus_usd_allowance() { }
-    [Fact(Skip = NeedsEngine)] public void TC_24_Mixed_currency_totals_are_never_added() { }
-    [Fact(Skip = NeedsEngine)] public void TC_25_Mixed_currency_run_creates_obligations_per_currency() { }
-    [Fact(Skip = NeedsEngine)] public void TC_27_Exchange_rate_change_after_finalisation_changes_nothing() { }
-
-    // ---- Pending: employment types and non-monthly payroll ----------------------------------
-
-    [Fact(Skip = NeedsEmployees)] public void TC_14_Casual_under_18_days_pays_no_nssa() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_14b_Casual_at_20_days_pays_nssa() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_15_Project_employee_cost_attributed_to_project() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_16_Weekly_employee_uses_the_official_weekly_table() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_17_Fortnightly_employee_uses_the_official_table() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_18_Part_time_ceiling_is_not_pro_rated() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_19_Loan_deducted_post_tax() { }
     [Fact(Skip = NeedsEmployees)] public void TC_20_Advance_recovered_post_tax() { }
-    [Fact(Skip = NeedsEmployees)] public void TC_33_Casual_six_week_threshold_warns_without_reclassifying() { }
 
-    // ---- Pending: statutory obligations ------------------------------------------------------
+    [Fact(Skip = NeedsEmployees)]
+    public void TC_33_Casual_six_week_threshold_warns_without_reclassifying() { }
 
     [Fact(Skip = NeedsObligations)] public void TC_28_Statutory_payment_outstanding() { }
     [Fact(Skip = NeedsObligations)] public void TC_29_Statutory_payment_completed() { }

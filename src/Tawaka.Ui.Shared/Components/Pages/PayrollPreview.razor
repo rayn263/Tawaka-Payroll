@@ -1,0 +1,344 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/payroll/preview/{RunId:guid}"
+@inject PayrollDbContext Db
+@inject Tawaka.Application.Payroll.PayrollRunService Runs
+@inject UserSession Session
+
+@* Every figure on this screen comes from the payroll engine. Nothing here calculates anything. *@
+
+@if (_run is null)
+{
+    <div class="card"><EmptyState Title="Payroll run not found" /></div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1>@_run.PayrollPeriod?.Name — run @_run.RunNumber</h1>
+            <div class="subtitle">
+                @_run.RunType · @_run.PayrollPeriod?.Frequency ·
+                pay date @(_run.PayrollPeriod?.PayDate.ToString("dd MMM yyyy"))
+                @if (_run.CalculatedAt is not null)
+                {
+                    <text> · calculated @_run.CalculatedAt.Value.ToString("dd MMM yyyy HH:mm") by @_run.CalculatedBy</text>
+                }
+            </div>
+        </div>
+        <div class="topbar-right">
+            @if (Session.HasPermission(Permissions.PayrollCalculate) && _run.CanCalculate)
+            {
+                <button class="btn btn-primary" @onclick="CalculateAsync" disabled="@_busy">
+                    @(_run.CalculatedAt is null ? "Calculate" : "Recalculate")
+                </button>
+            }
+            @if (Session.HasPermission(Permissions.PayrollApprove))
+            {
+                <button class="btn btn-secondary" @onclick="ApproveAsync"
+                        disabled="@(_busy || _run.Status != PayrollRunStatus.Review)">
+                    Approve
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_run.Mode == PayrollMode.Development)
+    {
+        <div class="alert alert-warning">
+            <strong>DEVELOPMENT CALCULATION.</strong>
+            These figures are produced from statutory rules that have not been verified against
+            their official sources. They must not be used to pay anyone or to make a statutory
+            return. See <a href="statutory">Statutory rules</a>.
+        </div>
+    }
+
+    @if (_unresolvedCount > 0)
+    {
+        <div class="alert alert-error">
+            <strong>LIVE PAYROLL BLOCKED — STATUTORY RULE VERIFICATION REQUIRED</strong>
+            <p>
+                @_unresolvedCount figures could not be calculated. A missing or unverified rule is
+                not a zero deduction, so those figures are shown as “unresolved” rather than 0.00.
+            </p>
+            <ul>
+                @foreach (var group in _unresolved)
+                {
+                    <li>
+                        <strong>@group.Key</strong> — @group.First().Message
+                        @if (!string.IsNullOrWhiteSpace(group.First().ComplianceQuestion))
+                        {
+                            <text> (compliance question @group.First().ComplianceQuestion)</text>
+                        }
+                        <div class="muted">@group.First().Remedy</div>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    <ValidationSummaryPanel Result="_validation" />
+
+    <div class="card filters">
+        <select @bind="_currencyFilter">
+            <option value="">All currencies</option>
+            @foreach (var currency in _rows.Select(r => r.CurrencyCode).Distinct())
+            {
+                <option value="@currency">@(currency == "ZWG" ? "ZiG" : currency)</option>
+            }
+        </select>
+        <select @bind="_departmentFilter">
+            <option value="">All departments</option>
+            @foreach (var department in _departments)
+            {
+                <option value="@department.Id">@department.Name</option>
+            }
+        </select>
+        <select @bind="_projectFilter">
+            <option value="">All projects</option>
+            @foreach (var project in _projects)
+            {
+                <option value="@project.Id">@project.Name</option>
+            }
+        </select>
+        <select @bind="_typeFilter">
+            <option value="">All employment types</option>
+            @foreach (var type in _employmentTypes)
+            {
+                <option value="@type.Code">@type.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (_rows.Count == 0)
+    {
+        <div class="card">
+            <EmptyState Title="Not calculated yet"
+                        Description="Run the calculation to see each employee's figures." />
+        </div>
+    }
+    else
+    {
+        @* Totals are grouped by currency and never added across currencies. *@
+        @foreach (var group in Filtered().GroupBy(r => r.CurrencyCode).OrderBy(g => g.Key))
+        {
+            <div class="card">
+                <h2>@(group.Key == "ZWG" ? "ZiG" : group.Key) payroll — @group.Count() employees</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr>
+                            <th>Employee</th><th>Cur</th>
+                            <th class="num">Basic</th><th class="num">Allowances</th>
+                            <th class="num">Overtime</th><th class="num">Bonus</th>
+                            <th class="num">Gross</th><th class="num">Taxable</th>
+                            <th class="num">PAYE</th><th class="num">AIDS Levy</th>
+                            <th class="num">NSSA</th><th class="num">Other</th>
+                            <th class="num">Net pay</th><th class="num">Employer cost</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in group.OrderBy(r => r.EmployeeName))
+                        {
+                            <tr class="@(row.IsCalculated ? null : "unresolved-row")">
+                                <td class="strong">
+                                    @row.EmployeeName
+                                    <div class="muted small">@row.EmployeeNumber</div>
+                                </td>
+                                <td>@(row.CurrencyCode == "ZWG" ? "ZiG" : row.CurrencyCode)</td>
+                                <td class="num">@Show(row.Basic, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.Allowances, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.Overtime, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.Bonus, row.CurrencyCode)</td>
+                                <td class="num strong">@Show(row.GrossEarningsAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.TaxableIncomeAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.PayeAfterCreditsAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.AidsLevyAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.NssaEmployeeAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.TotalOtherDeductionsAmount, row.CurrencyCode)</td>
+                                <td class="num strong">@Show(row.NetPayAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.TotalEmployerCostAmount, row.CurrencyCode)</td>
+                                <td>
+                                    <button class="btn btn-quiet"
+                                            @onclick="() => Explain(row.Id)">Explain</button>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="6" class="strong">Total (@(group.Key == "ZWG" ? "ZiG" : group.Key))</td>
+                            <td class="num strong">@Sum(group, r => r.GrossEarningsAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.TaxableIncomeAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.PayeAfterCreditsAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.AidsLevyAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.NssaEmployeeAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.TotalOtherDeductionsAmount, group.Key)</td>
+                            <td class="num strong">@Sum(group, r => r.NetPayAmount, group.Key)</td>
+                            <td class="num">@Sum(group, r => r.TotalEmployerCostAmount, group.Key)</td>
+                            <td></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_explaining is not null)
+    {
+        <ExplainCalculation RunEmployeeId="_explaining.Value" OnClose="() => _explaining = null" />
+    }
+}
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private sealed record Row(
+        Guid Id, string EmployeeName, string EmployeeNumber, string CurrencyCode,
+        string EmploymentTypeCode, Guid? DepartmentId, Guid? ProjectId, bool IsCalculated,
+        decimal? Basic, decimal? Allowances, decimal? Overtime, decimal? Bonus,
+        decimal? GrossEarningsAmount, decimal? TaxableIncomeAmount, decimal? PayeAfterCreditsAmount,
+        decimal? AidsLevyAmount, decimal? NssaEmployeeAmount, decimal? TotalOtherDeductionsAmount,
+        decimal? NetPayAmount, decimal? TotalEmployerCostAmount);
+
+    private PayrollRun? _run;
+    private List<Row> _rows = new();
+    private List<IGrouping<string, PayrollUnresolvedItem>> _unresolved = new();
+    private int _unresolvedCount;
+    private List<Department> _departments = new();
+    private List<Project> _projects = new();
+    private List<EmploymentType> _employmentTypes = new();
+    private ValidationResult? _validation;
+    private Guid? _explaining;
+    private bool _busy;
+
+    private string _currencyFilter = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private string _projectFilter = string.Empty;
+    private string _typeFilter = string.Empty;
+
+    protected override void OnParametersSet() => Load();
+
+    private void Load()
+    {
+        _run = Db.PayrollRuns.AsNoTracking()
+            .Include(r => r.PayrollPeriod)
+            .FirstOrDefault(r => r.Id == RunId);
+        if (_run is null)
+        {
+            return;
+        }
+
+        var employees = Db.PayrollRunEmployees.AsNoTracking()
+            .Include(e => e.EarningLines)
+            .Where(e => e.PayrollRunId == RunId)
+            .ToList();
+
+        _rows = employees.Select(e => new Row(
+            e.Id, e.EmployeeName, e.EmployeeNumber, e.CurrencyCode, e.EmploymentTypeCode,
+            e.DepartmentId, e.ProjectId, e.IsCalculated,
+            LineTotal(e, l => l.Code == "BASIC"),
+            LineTotal(e, l => l.Code is not ("BASIC" or "OVERTIME" or "BONUS_ANNUAL" or "BONUS_PERF")
+                              && l.IsIncludedInGross),
+            LineTotal(e, l => l.Code == "OVERTIME"),
+            LineTotal(e, l => l.Code.StartsWith("BONUS", StringComparison.Ordinal)),
+            e.GrossEarningsAmount, e.TaxableIncomeAmount, e.PayeAfterCreditsAmount,
+            e.AidsLevyAmount, e.NssaEmployeeAmount, e.TotalOtherDeductionsAmount,
+            e.NetPayAmount, e.TotalEmployerCostAmount)).ToList();
+
+        var runEmployeeIds = employees.Select(e => e.Id).ToList();
+        var unresolved = Db.PayrollUnresolvedItems.AsNoTracking()
+            .Where(u => runEmployeeIds.Contains(u.PayrollRunEmployeeId))
+            .ToList();
+        _unresolvedCount = unresolved.Count;
+        _unresolved = unresolved.GroupBy(u => u.Code).ToList();
+
+        var companyId = _run.CompanyId;
+        _departments = Db.Departments.AsNoTracking().Where(d => d.CompanyId == companyId).ToList();
+        _projects = Db.Projects.AsNoTracking().Where(p => p.CompanyId == companyId).ToList();
+        _employmentTypes = Db.EmploymentTypes.AsNoTracking()
+            .Where(t => t.CompanyId == companyId).OrderBy(t => t.DisplayOrder).ToList();
+    }
+
+    private static decimal? LineTotal(PayrollRunEmployee employee, Func<PayrollEarningLine, bool> predicate)
+    {
+        var lines = employee.EarningLines.Where(predicate).ToList();
+        return lines.Count == 0 ? null : lines.Sum(l => l.Amount);
+    }
+
+    private IEnumerable<Row> Filtered()
+    {
+        var rows = _rows.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_currencyFilter))
+        {
+            rows = rows.Where(r => r.CurrencyCode == _currencyFilter);
+        }
+
+        if (Guid.TryParse(_departmentFilter, out var department))
+        {
+            rows = rows.Where(r => r.DepartmentId == department);
+        }
+
+        if (Guid.TryParse(_projectFilter, out var project))
+        {
+            rows = rows.Where(r => r.ProjectId == project);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_typeFilter))
+        {
+            rows = rows.Where(r => r.EmploymentTypeCode == _typeFilter);
+        }
+
+        return rows;
+    }
+
+    /// <summary>An unresolved figure shows as a dash, never as 0.00.</summary>
+    private static string Show(decimal? amount, string currency) =>
+        amount is null
+            ? "—"
+            : amount.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Sum(
+        IEnumerable<Row> rows, Func<Row, decimal?> selector, string currency)
+    {
+        var values = rows.Select(selector).Where(v => v is not null).Select(v => v!.Value).ToList();
+        return values.Count == 0
+            ? "—"
+            : values.Sum().ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private void Explain(Guid runEmployeeId) => _explaining = runEmployeeId;
+
+    private async Task CalculateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Runs.CalculateAsync(RunId);
+            _validation = result.Succeeded ? null : result.Validation;
+            Db.ChangeTracker.Clear();
+            Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var validation = await Runs.ApproveAsync(RunId);
+            _validation = validation.IsValid ? null : validation;
+            Db.ChangeTracker.Clear();
+            Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

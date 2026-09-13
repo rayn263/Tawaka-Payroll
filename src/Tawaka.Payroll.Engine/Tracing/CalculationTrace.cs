@@ -17,7 +17,7 @@ public sealed record TraceStep(string Description, decimal? Value = null)
 /// The full derivation of a single calculated figure: which rule, which bracket, what inputs,
 /// what rounding, what came out. This is what the user sees when they click a number.
 /// </summary>
-public sealed class TraceEntry
+public sealed record TraceEntry
 {
     public required string Stage { get; init; }
 

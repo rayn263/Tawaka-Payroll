@@ -1,5 +1,4 @@
 @namespace Tawaka.Ui.Shared.Components.Pages
-@page "/payroll"
 @page "/time"
 @page "/loans"
 @page "/reports"
@@ -31,18 +30,6 @@
 
 @code {
     private record ModuleInfo(string Title, string Milestone, string[] Features, string? Dependency);
-
-    private static readonly ModuleInfo Payroll = new(
-        "Payroll", "Milestones 3 and 4",
-        new[]
-        {
-            "Payroll periods and calendars: monthly, weekly, fortnightly and custom",
-            "The calculation engine: gross, NSSA, taxable income, PAYE, credits, AIDS Levy, employer costs",
-            "Per-employee calculation preview with a full drill-down to how every figure was derived",
-            "The approval workflow: draft, calculate, review, approve, finalise, pay, lock",
-            "Payslips, and the statutory obligation register"
-        },
-        "Live payroll additionally requires the statutory rules to be verified. See the Statutory screen.");
 
     private static readonly ModuleInfo Time = new(
         "Time & Attendance", "Milestone 5",
@@ -80,9 +67,8 @@
 
     private ModuleInfo Module => new Uri(Nav.Uri).AbsolutePath.Trim('/').ToLowerInvariant() switch
     {
-        "time" => Time,
         "loans" => Loans,
         "reports" => Reports,
-        _ => Payroll
+        _ => Time
     };
 }

@@ -69,6 +69,21 @@ public enum CalculationMethod
     Strategy = 5
 }
 
+/// <summary>
+/// The form a PAYE table is expressed in. ZIMRA publishes tables as
+/// "income x rate less a fixed deduction"; the bands themselves also describe a progressive
+/// ladder. Both give the same answer when the deduction column is correct, and the published form
+/// is preferred so results reconcile with the authority's own figures (ADR-013).
+/// </summary>
+public enum TaxBracketApplication
+{
+    /// <summary>Each band applied to its own slice of income, then summed.</summary>
+    ProgressiveLadder = 0,
+
+    /// <summary>Income x the band's rate, less the band's published fixed deduction.</summary>
+    RateLessFixedDeduction = 1
+}
+
 /// <summary>Whether the AIDS Levy is charged on tax before or after credits.</summary>
 public enum AidsLevyBase
 {

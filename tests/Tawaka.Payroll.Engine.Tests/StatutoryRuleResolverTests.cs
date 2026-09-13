@@ -194,11 +194,13 @@ public class StatutoryRuleResolverTests
     }
 
     /// <summary>
-    /// A verified NSSA ceiling with no rule for applying it to non-monthly payroll is still not
-    /// usable — spec Q22, where the candidate methods differ roughly fourfold.
+    /// The resolver does not judge the NSSA ceiling application method, because whether it matters
+    /// depends on the pay frequency — which only the engine knows. A monthly ceiling on a monthly
+    /// payroll needs no conversion rule, and blocking it here would stop monthly payroll for a
+    /// weekly-only concern. The engine's period-aware refusal is covered in UnresolvedRuleTests.
     /// </summary>
     [Fact]
-    public void Verified_nssa_rule_with_undetermined_ceiling_application_is_still_blocked()
+    public void The_resolver_does_not_second_guess_the_nssa_ceiling_application()
     {
         var source = new TestRuleSource().Add(
             TestRules.Nssa(VerificationStatus.Verified, CeilingApplicationMethod.NotDetermined));
@@ -211,9 +213,7 @@ public class StatutoryRuleResolverTests
             Currency = CurrencyCode.Usd
         });
 
-        Assert.False(resolution.Succeeded);
-        Assert.Equal(RuleResolutionFailureReason.IncompleteConfiguration, resolution.Failure!.Reason);
-        Assert.Contains("Q22", resolution.Failure.Remedy!);
+        Assert.True(resolution.Succeeded);
     }
 
     /// <summary>Multi-currency tax cannot run on advisor sign-off alone being absent — spec Q1.</summary>

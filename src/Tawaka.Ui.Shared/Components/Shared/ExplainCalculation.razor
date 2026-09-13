@@ -1,0 +1,188 @@
+@namespace Tawaka.Ui.Shared.Components.Shared
+@inject PayrollDbContext Db
+
+@* "Explain my pay" — the calculation chain in human-readable form.
+   This is not cosmetic: it is the audit and debugging facility. Every figure states the rule that
+   produced it, the rule's verification grade, the arithmetic, the rounding and the source. *@
+
+<div class="modal-backdrop" @onclick="Close"></div>
+<div class="modal">
+    <div class="modal-header">
+        <div>
+            <h2>Explain calculation</h2>
+            <div class="subtitle">@_employee?.EmployeeName · @_employee?.EmployeeNumber</div>
+        </div>
+        <button class="btn btn-quiet" @onclick="Close">Close</button>
+    </div>
+
+    <div class="modal-body">
+        @if (_employee is null)
+        {
+            <EmptyState Title="Nothing to explain yet" />
+        }
+        else
+        {
+            @if (_unresolved.Count > 0)
+            {
+                <div class="alert alert-error">
+                    <strong>Some figures could not be calculated.</strong>
+                    <ul>
+                        @foreach (var item in _unresolved)
+                        {
+                            <li>
+                                <strong>@item.ItemKey</strong> — @item.Message
+                                @if (!string.IsNullOrWhiteSpace(item.ComplianceQuestion))
+                                {
+                                    <text> (@item.ComplianceQuestion)</text>
+                                }
+                                <div class="muted">@item.Remedy</div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @foreach (var entry in _trace)
+            {
+                <div class="explain-step">
+                    <div class="explain-head">
+                        <span class="explain-item">@entry.ItemKey</span>
+                        @if (entry.OutputAmount is not null)
+                        {
+                            <span class="explain-value">
+                                @Format(entry.OutputAmount, entry.OutputCurrency)
+                            </span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(entry.RuleId))
+                    {
+                        <div class="explain-rule">
+                            Rule: <span class="mono">@entry.RuleId</span>
+                            @if (!string.IsNullOrWhiteSpace(entry.VerificationStatus))
+                            {
+                                <StatusBadge Label="@entry.VerificationStatus"
+                                             Tone="@Tone(entry.VerificationStatus)" />
+                            }
+                            @if (entry.RuleEffectiveFrom is not null)
+                            {
+                                <text> · effective @entry.RuleEffectiveFrom.Value.ToString("dd MMM yyyy")</text>
+                            }
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.Inputs))
+                    {
+                        <dl class="explain-inputs">
+                            @foreach (var (key, value) in ParseInputs(entry.Inputs))
+                            {
+                                <dt>@key</dt>
+                                <dd>@value</dd>
+                            }
+                        </dl>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.Steps))
+                    {
+                        <ul class="explain-steps">
+                            @foreach (var step in ParseSteps(entry.Steps))
+                            {
+                                <li class="mono">@step</li>
+                            }
+                        </ul>
+                    }
+
+                    @if (entry.RawValue is not null && !string.IsNullOrWhiteSpace(entry.RoundingApplied))
+                    {
+                        <div class="explain-rounding">
+                            Unrounded @entry.RawValue.Value.ToString("N4") · rounded to
+                            @entry.RoundingApplied
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.Conversion))
+                    {
+                        <div class="explain-rounding">Conversion: @entry.Conversion</div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.Explanation))
+                    {
+                        <div class="explain-note">@entry.Explanation</div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.RuleSource))
+                    {
+                        <div class="explain-source">Source: @entry.RuleSource</div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid RunEmployeeId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private PayrollRunEmployee? _employee;
+    private List<PayrollCalculationTraceEntry> _trace = new();
+    private List<PayrollUnresolvedItem> _unresolved = new();
+
+    protected override void OnParametersSet()
+    {
+        _employee = Db.PayrollRunEmployees.AsNoTracking()
+            .FirstOrDefault(e => e.Id == RunEmployeeId);
+        _trace = Db.PayrollCalculationTraces.AsNoTracking()
+            .Where(t => t.PayrollRunEmployeeId == RunEmployeeId)
+            .OrderBy(t => t.Sequence).ToList();
+        _unresolved = Db.PayrollUnresolvedItems.AsNoTracking()
+            .Where(u => u.PayrollRunEmployeeId == RunEmployeeId).ToList();
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private static string Format(decimal? amount, string? currency)
+    {
+        if (amount is null)
+        {
+            return "—";
+        }
+
+        var label = currency == "ZWG" ? "ZiG" : currency ?? string.Empty;
+        return $"{label} {amount.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)}".Trim();
+    }
+
+    private static string Tone(string? status) => status switch
+    {
+        "Verified" => "verified",
+        "Supported" => "supported",
+        "Unverified" => "unverified",
+        _ => "disabled"
+    };
+
+    private static IEnumerable<KeyValuePair<string, string>> ParseInputs(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer
+                       .Deserialize<Dictionary<string, string>>(json)
+                   ?? new Dictionary<string, string>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new Dictionary<string, string>();
+        }
+    }
+
+    private static IEnumerable<string> ParseSteps(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new List<string>();
+        }
+    }
+}

@@ -12,7 +12,7 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **195 passing, 31 skipped, 0 failing.**
+Current result: **408 passing, 6 skipped, 0 failing.**
 
 ## The two kinds of test
 
@@ -39,6 +39,10 @@ They are the majority of the suite and the ones that protect the design.
 | `EmployeeService` | Duplicate employee numbers and national IDs are refused; leaving is a status change, never a delete; every status change is recorded; permissions are enforced |
 | `EmployeeContractService` | **A salary change creates a new version and preserves the old one**; the contract applying on a past date is still resolvable; only one contract is ever current; superseding requires a reason and cannot be backdated before the version it replaces |
 | Employee validation | Required fields, negative salary, end-before-start dates, missing currency, missing rate for the earnings basis, bank versus mobile-money requirements, percentage allocation bounds |
+| `PayrollCalculator` | The full pipeline against the seed rules: TC-01 to TC-15, TC-19, TC-21 to TC-23 |
+| Unresolved behaviour | A missing or unverified rule produces an **absent** figure with its compliance question, never 0.00; weekly payroll refuses an undetermined ceiling application; monthly payroll is unaffected by it; a published-form table without its fixed-deduction column refuses; mixed-currency earnings refuse without an approved strategy |
+| Financial invariants | Across 19 salaries including every band boundary: gross less deductions equals net; totals reconcile to lines; statutory deductions never exceed gross; net pay is never negative; insurable earnings never exceed the ceiling; PAYE and net pay both rise monotonically with income; the levy is always 3% of tax after credits; employer contributions never reduce net pay; USD and ZiG cannot be added |
+| `PayrollRunService` | Historical reproducibility — a later salary increase and a future tax table both leave a calculated September untouched; an approved run cannot be silently recalculated; a locked run is immutable; a development run cannot be approved; a run with unresolved figures cannot be approved; the calculator cannot approve their own run |
 
 ### Statutory seed tests — against clearly labelled temporary rules
 
@@ -72,20 +76,43 @@ Seeding itself is also asserted honestly:
 - `Every_employment_type_has_a_matching_nssa_eligibility_rule` — coverage can never fall back to
   an assumption
 
+## Invariant tests
+
+`InvariantTests` asserts properties that must hold for every calculation, across a spread of
+salaries chosen to sit on band boundaries and rounding edges. These caught a real defect during
+Milestone 3: unrounded input amounts made payslip totals disagree with the lines that composed
+them. Earnings are now rounded to currency precision on entry.
+
 ## The 34 compliance cases
 
 `ComplianceTestCatalogue.cs` holds all 34 cases from
 `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §24 in one place, so the whole compliance surface appears
 in every test run.
 
-**Implemented now (4):** TC-26 historical rule versioning · TC-31 unverified rule blocks live
-payroll · TC-32 the same rule calculates in development mode · TC-34 a missing period table blocks
-rather than deriving. TC-30 (locked payroll modification) is implemented in
-`Tawaka.Infrastructure.Tests`, where the interceptor it exercises lives.
+**Implemented (28 of 34).** Milestone 3 activated most of the catalogue against the real engine.
+`ComplianceTestCatalogue.cs` lists where each case now lives.
 
-**Skipped, with the reason stated (30):** cases needing the calculation engine (Milestone 3), the
-employee and contract model (Milestone 2), or the statutory obligation register (Milestone 4).
-They are skipped rather than omitted so the outstanding work is counted every time the suite runs.
+**Still skipped (6):** TC-18 (part-time ceiling treatment, pending Q4a/Q22), TC-20 (advance
+recovery) and TC-33 (casual six-week warning) need modules not yet built; TC-28, TC-29 and TC-29b
+need the statutory obligation register in Milestone 4. They stay in the file so the outstanding
+work is counted every time the suite runs.
+
+## Running a payroll by hand
+
+```bash
+./foundation-check.sh                                  # rule register and the live gate
+dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll
+dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules
+```
+
+`--payroll` creates two employees — one on USD 850, one on ZiG 15,000 — a September 2026 period,
+and calculates them through the engine, then prints the preview, one full calculation explanation
+and an approval attempt. It signs in as a payroll officer to calculate and as a manager to approve,
+so segregation of duties is exercised rather than described.
+
+`--verify-rules` additionally marks the seeded rules verified, as a real verification exercise
+would, so the engine can be seen calculating end to end. It is a demonstration switch: it does not
+make the rules correct, and the application never does this by itself.
 
 ## Verifying the foundation by hand
 

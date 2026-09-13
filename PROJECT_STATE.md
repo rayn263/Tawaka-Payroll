@@ -1,8 +1,8 @@
 # Project State
 
-**Last updated:** 2026-09-12
-**Current phase:** Phase 0 / Phase 1 foundation
-**Current milestone:** Milestone 2 — Company, employees and security — **COMPLETE, awaiting approval**
+**Last updated:** 2026-09-13
+**Current phase:** Phase 1 — core payroll
+**Current milestone:** Milestone 3 — Payroll periods and calculation engine — **COMPLETE, awaiting approval**
 **Payroll mode:** DEVELOPMENT (live payroll is gated and currently blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
@@ -36,12 +36,12 @@ Clean architecture, dependencies inward only. Eleven projects:
 | Project | Purpose | Builds on Linux |
 |---|---|---|
 | `src/Tawaka.Domain` | Entities and value objects: `Money`, `CurrencyCode`, `DateRange`, currencies, statutory rules, audit, company, organisation, employees, earnings, security | yes |
-| `src/Tawaka.Payroll.Engine` | Calculation tracing and currency conversion records. **No calculations yet** | yes |
-| `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services | yes |
+| `src/Tawaka.Payroll.Engine` | **The calculation engine**: pipeline, PAYE table and NSSA calculators, rounding policy, input snapshot, immutable result, tracing | yes |
+| `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services, payroll snapshot builder and run service | yes |
 | `src/Tawaka.Infrastructure` | EF Core context, configurations, migrations, interceptors, seeding, DI | yes |
 | `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — layout, login, dashboard, employees, profile, projects, statutory, settings | yes |
 | `src/Tawaka.Ui.Desktop` | WPF host only: window, `BlazorWebView`, startup wiring (`net8.0-windows`) | **no — Windows only** |
-| `tools/Tawaka.Foundation.Cli` | Cross-platform foundation check: migrate, seed, print rule register, run the gate | yes |
+| `tools/Tawaka.Foundation.Cli` | Cross-platform check: migrate, seed, rule register, live gate, and `--payroll` to run a real calculation and print the preview and an explanation | yes |
 | `tests/Tawaka.Domain.Tests` | Money, currency, date range, conversion provenance | yes |
 | `tests/Tawaka.Application.Tests` | Password hashing and policy, employee/contract/payment validation | yes |
 | `tests/Tawaka.Payroll.Engine.Tests` | Rule resolution, live gate, tracing, the 34-case compliance catalogue | yes |
@@ -55,8 +55,8 @@ and `Tawaka.Payroll.sln` (adds the Windows desktop host).
 | | |
 |---|---|
 | Provider | SQLite |
-| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity` |
-| Tables | 44 |
+| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913_PayrollRunsAndResults` |
+| Tables | 52 |
 
 Milestone 1 (16): `AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
 `CurrencyTaxStrategyRules`, `EmployerLevyRules`, `ExchangeRates`, `NssaEligibilityRules`,
@@ -69,6 +69,10 @@ Milestone 2 (28): `Companies`, `CompanyCurrencies`, `CompanyBankAccounts`, `Depa
 `EmployeeProjectAssignments`, `EmployeeStatusHistory`, `EmployeeNextOfKin`, `EmployeeDocuments`,
 `EarningTypes`, `DeductionTypes`, `EmployeeRecurringEarnings`, `EmployeeRecurringDeductions`,
 `Users`, `Roles`, `Permissions`, `RolePermissions`, `UserRoles`, `LoginAttempts`.
+
+Milestone 3 (8): `PayrollRuns`, `PayrollRunEmployees`, `PayrollEarningLines`,
+`PayrollDeductionLines`, `PayrollEmployerCostLines`, `PayrollCalculationTraces`,
+`PayrollUnresolvedItems`, `PayrollCostAllocations`.
 
 **Company-ready:** every company-scoped table carries `CompanyId`, and `StatutoryRule` carries a
 nullable `CompanyId` so employer-specific rules (APWCS, NEC) can coexist with national ones. The
@@ -103,12 +107,27 @@ Rule *infrastructure* is complete; no statutory *calculation* exists yet, by des
 |---|---|---|
 | Domain | 29 | 0 |
 | Application | 43 | 0 |
-| Payroll.Engine | 31 | 31 |
-| Infrastructure | 92 | 0 |
-| **Total** | **195** | **31** |
+| Payroll.Engine | 230 | 6 |
+| Infrastructure | 106 | 0 |
+| **Total** | **408** | **6** |
+
+The skipped count fell from 31 to 6: Milestone 3 activated most of the compliance catalogue against
+the real engine. The six that remain need the loans module, the casual-engagement warning or the
+statutory obligation register.
 
 The 31 skipped are compliance cases that need later milestones; they are present and counted
 rather than omitted. See `TESTING.md`.
+
+## 5a. What the engine does
+
+Ordered pipeline: gather earnings → apply exemptions → gross → NSSA → pre-tax deductions →
+tax base → PAYE → credits → AIDS Levy → post-tax deductions → net pay → employer costs → cost
+allocation. Every stage appends to a trace that names the rule, its verification grade, the
+arithmetic, the rounding and the source.
+
+No statutory value appears anywhere in the engine. Every rate, threshold and ceiling arrives
+through resolved rules, and a rule that cannot be resolved produces an absent figure with a reason
+— never a zero.
 
 ## 6. Known issues and limitations
 
@@ -133,6 +152,14 @@ rather than omitted. See `TESTING.md`.
    Milestone 4 work and is noted in the interceptor.
 7. **`NationalId` format checking is opt-in and currently off.** District codes and check letters
    vary, and rejecting a genuine identity number is worse than accepting an unusual one.
+8. **Month-to-date NSSA accumulation is not implemented.** If Q22 is answered as "accumulate within
+   the calendar month", the engine refuses rather than approximating; pro-rata and per-run are
+   implemented.
+9. **Mixed-currency remuneration is modelled but not calculated.** The refusal path is implemented
+   and tested; the aggregate-and-apportion arithmetic waits on Q1 being answered, because building
+   it now would mean guessing the conversion direction.
+10. **No payslip document, statutory obligation register or bank file yet** — Milestone 4, as
+    instructed.
 
 ## 7. Blocking questions
 
@@ -142,13 +169,11 @@ Full register in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25; summary in
 
 ## 8. Next milestone
 
-**Milestone 3 — Payroll periods and the calculation engine.** Not started; awaiting approval.
+**Milestone 4 — Payslips, statutory obligations and reports.** Not started; awaiting approval.
 
-Planned: payroll calendars and periods (monthly, weekly, fortnightly, custom); the
-`PayrollInputSnapshot` assembled from employee, contract, recurring earnings and deductions;
-the ordered calculation pipeline consuming resolved statutory rules; `Money` persisted as a
-column pair on payroll transaction lines; the calculation trace written per figure; and the
-remaining compliance test cases turned on as the engine makes them executable.
+Planned: the payslip document (screen, print and PDF from one template); the statutory obligation
+register with the four independent states (calculated, deducted, approved, paid) and payment
+evidence; finalise, pay and lock transitions; and the core payroll reports, per currency.
 
-Live payroll stays blocked throughout: the engine will calculate in development mode only until
-the verification checklist is cleared.
+Live payroll stays blocked throughout: the engine calculates in development mode only until the
+verification checklist in the compliance specification is cleared.

@@ -11,9 +11,8 @@ using Tawaka.Infrastructure.Seeding;
 // it creates the database from the real migrations, seeds the statutory baseline, prints the rule
 // register with verification status, and runs the live payroll gate.
 
-var databasePath = args.Length > 0
-    ? args[0]
-    : Path.Combine(Path.GetTempPath(), "tawaka-foundation.db");
+var databasePath = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal))
+                   ?? Path.Combine(Path.GetTempPath(), "tawaka-foundation.db");
 
 if (File.Exists(databasePath))
 {
@@ -110,3 +109,10 @@ Console.WriteLine();
 Console.WriteLine(report.IsBlocked
     ? "Result: payroll may run in DEVELOPMENT mode only."
     : "Result: payroll may run in LIVE mode.");
+
+// --payroll runs a real calculation through the engine; --verify-rules additionally marks the
+// seeded rules verified so the engine can be seen calculating end to end.
+if (args.Contains("--payroll"))
+{
+    await Tawaka.Foundation.Cli.PayrollDemo.RunAsync(provider, args.Contains("--verify-rules"));
+}

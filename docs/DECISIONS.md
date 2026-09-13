@@ -197,3 +197,43 @@ returned to the caller exactly once for display, stored only as a PBKDF2 hash, w
 `MustChangePassword` set.
 **Consequences:** No known-credential window. The password cannot be recovered if lost at first
 run — the account must be reset instead, which is the correct trade.
+
+### ADR-023 — The workflow lives on the payroll run, not the calendar period
+**Status:** Accepted (Milestone 3)
+**Context:** The seven-state lifecycle (Draft → Locked) has to attach to something, and a period
+may legitimately need more than one processing: a normal run, then a supplementary or a correction.
+**Decision:** `PayrollPeriod` remains the calendar period (company, dates, frequency, its own
+Open/Closed/Locked state). `PayrollRun` carries the seven-state workflow, the actor on each
+transition, the engine version and the rule snapshot.
+**Consequences:** A correction run does not disturb the original. The period-level lock still gates
+everything inside it, and both are `ILockable`, so the lock interceptor covers both.
+
+### ADR-024 — Unresolved is not zero
+**Status:** Accepted (Milestone 3)
+**Context:** The cheapest way to make a payroll screen look finished is to treat a missing rule as
+a nil deduction. It is also the most dangerous: the payslip looks complete and is wrong.
+**Decision:** Money fields on `PayrollResult` are nullable. A figure that could not be produced is
+null and carries an `UnresolvedItem` naming the rule, its grade, the compliance question and the
+remedy. A legitimate zero is `Money.Zero` and displays as 0.00.
+**Consequences:** The preview shows "—" for unresolved and "0.00" for a real zero, and a run with
+any unresolved figure cannot be approved.
+
+### ADR-025 — One rounding policy for the whole engine
+**Status:** Accepted (Milestone 3)
+**Context:** Rounding scattered across calculation classes is how payrolls develop cent-level
+discrepancies nobody can explain.
+**Decision:** A single `RoundingPolicy` — two decimal places, away from zero, intermediate tax
+steps unrounded — is carried on the snapshot and used by every stage. Earnings are rounded to
+currency precision on entry so that lines and totals reconcile, and sums of rounded values are
+never re-rounded. Every rounding is recorded in the trace.
+**Consequences:** Totals always equal the sum of their lines. Away-from-zero is used rather than
+banker's rounding because half-to-even drifts systematically in the employer's favour across a
+workforce.
+
+### ADR-026 — The user interface never calculates
+**Status:** Accepted (Milestone 3)
+**Context:** A screen that computes "just the total" is how two sources of truth appear.
+**Decision:** Every figure displayed comes from a `PayrollResult` produced by `PayrollCalculator`
+and persisted to the run. The preview aggregates and filters stored results; it performs no payroll
+arithmetic.
+**Consequences:** What the user sees is what was calculated, traced and stored.

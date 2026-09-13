@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\Tawaka.Domain\Tawaka.Domain.csproj" />
     <ProjectReference Include="..\..\src\Tawaka.Application\Tawaka.Application.csproj" />
     <ProjectReference Include="..\..\src\Tawaka.Infrastructure\Tawaka.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Tawaka.Payroll.Engine\Tawaka.Payroll.Engine.csproj" />
   </ItemGroup>
 
 </Project>

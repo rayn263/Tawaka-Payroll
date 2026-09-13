@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Employees;
+using Tawaka.Application.Payroll;
 using Tawaka.Application.Security;
 using Tawaka.Application.Statutory;
 using Tawaka.Infrastructure.Interceptors;
@@ -50,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<RoleService>();
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeContractService>();
+        services.AddScoped<PayrollSnapshotBuilder>();
+        services.AddScoped<PayrollRunService>();
 
         services.AddScoped<StatutoryRuleSeeder>();
         services.AddScoped<CompanySeeder>();

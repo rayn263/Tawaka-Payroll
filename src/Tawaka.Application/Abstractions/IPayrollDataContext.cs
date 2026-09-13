@@ -60,6 +60,14 @@ public interface IPayrollDataContext
 
     DbSet<StatutoryRule> StatutoryRules { get; }
     DbSet<PayrollPeriod> PayrollPeriods { get; }
+    DbSet<PayrollRun> PayrollRuns { get; }
+    DbSet<PayrollRunEmployee> PayrollRunEmployees { get; }
+    DbSet<PayrollEarningLine> PayrollEarningLines { get; }
+    DbSet<PayrollDeductionLine> PayrollDeductionLines { get; }
+    DbSet<PayrollEmployerCostLine> PayrollEmployerCostLines { get; }
+    DbSet<PayrollCalculationTraceEntry> PayrollCalculationTraces { get; }
+    DbSet<PayrollUnresolvedItem> PayrollUnresolvedItems { get; }
+    DbSet<PayrollCostAllocation> PayrollCostAllocations { get; }
     DbSet<AppSetting> AppSettings { get; }
     DbSet<AuditLog> AuditLogs { get; }
 

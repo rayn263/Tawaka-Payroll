@@ -1,0 +1,202 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/payroll"
+@inject PayrollDbContext Db
+@inject Tawaka.Application.Payroll.PayrollRunService Runs
+@inject UserSession Session
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <h1>Payroll</h1>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+<div class="card">
+    <h2>Payroll periods</h2>
+    @if (_periods.Count == 0)
+    {
+        <EmptyState Title="No payroll periods yet"
+                    Description="Create the period you want to process." />
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+            <tr><th>Code</th><th>Period</th><th>Frequency</th><th>Pay date</th>
+                <th class="num">Runs</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+            @foreach (var period in _periods)
+            {
+                <tr>
+                    <td class="mono">@period.Code</td>
+                    <td class="strong">@period.Name</td>
+                    <td>@period.Frequency</td>
+                    <td>@period.PayDate.ToString("dd MMM yyyy")</td>
+                    <td class="num">@_runCounts.GetValueOrDefault(period.Id)</td>
+                    <td><StatusBadge Label="@period.Status.ToString()"
+                                     Tone="@(period.Status == PayrollPeriodStatus.Locked ? "disabled" : "verified")" /></td>
+                    <td>
+                        @if (Session.HasPermission(Permissions.PayrollCreate) && !period.IsLocked)
+                        {
+                            <button class="btn btn-secondary" @onclick="() => CreateRunAsync(period.Id)">
+                                New run
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (Session.HasPermission(Permissions.PayrollCreate))
+{
+    <div class="card">
+        <h2>Create a payroll period</h2>
+        <div class="form-grid">
+            <div><label>Code *</label><input @bind="_code" placeholder="2026-09" /></div>
+            <div><label>Name *</label><input @bind="_name" placeholder="September 2026" /></div>
+            <div>
+                <label>Frequency *</label>
+                <select @bind="_frequency">
+                    @foreach (var basis in new[] { PeriodBasis.Monthly, PeriodBasis.Fortnightly, PeriodBasis.Weekly, PeriodBasis.Daily })
+                    {
+                        <option value="@basis">@basis</option>
+                    }
+                </select>
+            </div>
+            <div><label>Start date *</label><input type="date" @bind="_start" /></div>
+            <div><label>End date *</label><input type="date" @bind="_end" /></div>
+            <div><label>Pay date *</label><input type="date" @bind="_payDate" /></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="CreatePeriodAsync">Create period</button>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <h2>Payroll runs</h2>
+    @if (_runs.Count == 0)
+    {
+        <EmptyState Title="No payroll runs yet" />
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+            <tr><th>Period</th><th>Run</th><th>Type</th><th>Mode</th><th>Status</th>
+                <th>Calculated</th><th></th></tr>
+            </thead>
+            <tbody>
+            @foreach (var run in _runs)
+            {
+                <tr>
+                    <td class="strong">@run.PayrollPeriod?.Name</td>
+                    <td class="num">@run.RunNumber</td>
+                    <td>@run.RunType</td>
+                    <td>
+                        <StatusBadge Label="@(run.Mode == PayrollMode.Live ? "LIVE" : "DEVELOPMENT")"
+                                     Tone="@(run.Mode == PayrollMode.Live ? "verified" : "supported")" />
+                    </td>
+                    <td><StatusBadge Label="@run.Status.ToString()"
+                                     Tone="@StatusTone(run.Status)" /></td>
+                    <td>@(run.CalculatedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                    <td>
+                        <a class="btn btn-secondary" href="payroll/preview/@run.Id">Preview</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<PayrollPeriod> _periods = new();
+    private List<PayrollRun> _runs = new();
+    private Dictionary<Guid, int> _runCounts = new();
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private string _code = string.Empty;
+    private string _name = string.Empty;
+    private PeriodBasis _frequency = PeriodBasis.Monthly;
+    private DateTime _start = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _end = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1).AddDays(-1);
+    private DateTime _payDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1).AddDays(-1);
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _periods = Db.PayrollPeriods.AsNoTracking()
+            .Where(p => p.CompanyId == _companyId)
+            .OrderByDescending(p => p.StartDate).ToList();
+        _runs = Db.PayrollRuns.AsNoTracking()
+            .Include(r => r.PayrollPeriod)
+            .Where(r => r.CompanyId == _companyId)
+            .OrderByDescending(r => r.CreatedAt).ToList();
+        _runCounts = _runs.GroupBy(r => r.PayrollPeriodId)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private static string StatusTone(PayrollRunStatus status) => status switch
+    {
+        PayrollRunStatus.Approved or PayrollRunStatus.Finalised or PayrollRunStatus.Paid => "verified",
+        PayrollRunStatus.Review or PayrollRunStatus.Calculating => "supported",
+        PayrollRunStatus.Locked => "disabled",
+        _ => "disabled"
+    };
+
+    private async Task CreatePeriodAsync()
+    {
+        var validation = ValidationResult.Success();
+        validation.Require(_code, "Code");
+        validation.Require(_name, "Name");
+        validation.AddIf(_end < _start, "End date", "End date cannot precede the start date.");
+        validation.AddIf(_payDate < _start, "Pay date", "Pay date cannot precede the period start.");
+        validation.AddIf(
+            Db.PayrollPeriods.Any(p => p.CompanyId == _companyId && p.Code == _code),
+            "Code", $"Period '{_code}' already exists.");
+
+        _validation = validation;
+        if (!validation.IsValid)
+        {
+            return;
+        }
+
+        Db.PayrollPeriods.Add(new PayrollPeriod
+        {
+            CompanyId = _companyId,
+            Code = _code,
+            Name = _name,
+            Frequency = _frequency,
+            StartDate = DateOnly.FromDateTime(_start),
+            EndDate = DateOnly.FromDateTime(_end),
+            PayDate = DateOnly.FromDateTime(_payDate),
+            TaxYear = _payDate.Year,
+            Mode = PayrollMode.Development
+        });
+        await Db.SaveChangesAsync();
+
+        _code = _name = string.Empty;
+        _validation = null;
+        Load();
+    }
+
+    private async Task CreateRunAsync(Guid periodId)
+    {
+        var result = await Runs.CreateRunAsync(periodId);
+        if (!result.Succeeded)
+        {
+            _validation = result.Validation;
+            return;
+        }
+
+        Nav.NavigateTo($"payroll/preview/{result.Value!.Id}");
+    }
+}

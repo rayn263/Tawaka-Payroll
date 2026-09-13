@@ -162,12 +162,10 @@ public sealed class StatutoryRuleResolver : IStatutoryRuleResolver
     private static (string Message, string Remedy)? DescribeIncompleteConfiguration(StatutoryRule rule) =>
         rule switch
         {
-            NssaRule nssa when nssa.CeilingPeriodBasis != PeriodBasis.Monthly => NoIssue,
-            NssaRule nssa when nssa.CeilingApplication == CeilingApplicationMethod.NotDetermined =>
-                ($"NSSA rule '{nssa.RuleId}' does not specify how the monthly insurable earnings " +
-                 "ceiling applies to non-monthly payroll.",
-                 "Resolve compliance question Q22 and set the ceiling application method in " +
-                 "Settings > NSSA Configuration."),
+            // The NSSA ceiling application method is deliberately NOT checked here. Whether it
+            // matters depends on the pay frequency, which this resolver does not know: a monthly
+            // ceiling applied to a monthly payroll needs no conversion rule at all. The engine
+            // makes that judgement, because it knows the period basis (compliance spec Q22).
             CurrencyTaxStrategyRule strategy when
                 strategy.Strategy != CurrencyTaxStrategy.SingleCurrency && !strategy.ApprovedByAdvisor =>
                 ($"Multi-currency tax strategy '{strategy.RuleId}' has not been approved by a tax advisor.",

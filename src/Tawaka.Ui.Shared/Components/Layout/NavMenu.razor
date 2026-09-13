@@ -13,7 +13,10 @@
         <NavLink href="employees">Employees</NavLink>
     }
 
-    <NavLink href="payroll">Payroll <span class="nav-pill">M4</span></NavLink>
+    @if (Session.HasPermission(Permissions.PayrollView))
+    {
+        <NavLink href="payroll">Payroll</NavLink>
+    }
 
     @if (Session.HasPermission(Permissions.ProjectsView))
     {
