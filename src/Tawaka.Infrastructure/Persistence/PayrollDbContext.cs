@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Application.Abstractions;
+using Tawaka.Domain.Accounting;
 using Tawaka.Domain.Audit;
 using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Companies;
@@ -122,6 +123,8 @@ public class PayrollDbContext : DbContext, IPayrollDataContext
     public DbSet<OvertimeRule> OvertimeRules => Set<OvertimeRule>();
 
     public DbSet<PayDivisorRule> PayDivisorRules => Set<PayDivisorRule>();
+
+    public DbSet<GlAccountMapping> GlAccountMappings => Set<GlAccountMapping>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

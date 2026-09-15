@@ -273,10 +273,135 @@ else
                 }
                 break;
 
+            case "Leave":
+                @if (_leaveBalances.Count == 0 && _leaveRequests.Count == 0)
+                {
+                    <EmptyState Title="No leave recorded"
+                                Description="Leave requests and balances appear here once leave is captured in Time & Leave." />
+                }
+                else
+                {
+                    <h3>Balances</h3>
+                    <table class="data">
+                        <thead>
+                        <tr><th>Leave type</th><th class="num">Entitlement</th>
+                            <th class="num">Taken</th><th class="num">Balance</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var balance in _leaveBalances)
+                        {
+                            <tr>
+                                <td class="strong">@balance.LeaveType?.Name</td>
+                                <td class="num">@Days(balance.EntitlementDays)</td>
+                                <td class="num">@balance.DaysTaken.ToString("N2")</td>
+                                <td class="num strong">@Days(balance.BalanceDays)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <p class="muted small">
+                        A balance shown as "—" is undetermined, not zero: the entitlement for that
+                        leave type has not been established from an authoritative source.
+                    </p>
+
+                    <h3>Requests</h3>
+                    <table class="data">
+                        <thead>
+                        <tr><th>Type</th><th>From</th><th>To</th><th class="num">Days</th>
+                            <th>Paid</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var request in _leaveRequests)
+                        {
+                            <tr>
+                                <td>@request.LeaveType?.Name</td>
+                                <td>@request.StartDate.ToString("dd MMM yyyy")</td>
+                                <td>@request.EndDate.ToString("dd MMM yyyy")</td>
+                                <td class="num">@request.Days.ToString("N2")</td>
+                                <td>@(request.IsPaid ? "Paid" : "Unpaid")</td>
+                                <td>@request.ApprovalStatus</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                break;
+
+            case "Loans":
+                @if (_loans.Count == 0)
+                {
+                    <EmptyState Title="No loans or advances"
+                                Description="Loans appear here once raised in Loans & Advances." />
+                }
+                else
+                {
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Kind</th><th>Currency</th><th class="num">Principal</th>
+                            <th class="num">Repaid</th><th class="num">Outstanding</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var loan in _loans)
+                        {
+                            <tr>
+                                <td class="mono">@loan.LoanNumber</td>
+                                <td>@loan.Kind</td>
+                                <td>@(loan.CurrencyCode == "ZWG" ? "ZiG" : loan.CurrencyCode)</td>
+                                <td class="num">@loan.PrincipalAmount.ToString("N2")</td>
+                                <td class="num">@loan.TotalRepaid.Amount.ToString("N2")</td>
+                                <td class="num strong">@loan.Outstanding.Amount.ToString("N2")</td>
+                                <td>@loan.Status</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <p class="muted small">
+                        The outstanding balance is the sum of the loan's ledger, not a stored
+                        figure. The full statement is in Loans &amp; Advances.
+                    </p>
+                }
+                break;
+
             case "Payroll history":
-            case "Payslips":
-                <EmptyState Title="@($"{_tab} arrive with the payroll engine")"
-                            Description="Payroll runs and payslips are built in Milestones 3 and 4. Nothing is shown here because no payroll has been processed — not because it is hidden." />
+                @if (_payrollHistory.Count == 0)
+                {
+                    <EmptyState Title="No payroll processed for this employee yet"
+                                Description="Nothing is shown here because no payroll run has included them — not because it is hidden." />
+                }
+                else
+                {
+                    <div class="scroll-x">
+                        <table class="data">
+                            <thead>
+                            <tr><th>Period</th><th>Currency</th><th class="num">Gross</th>
+                                <th class="num">PAYE</th><th class="num">NSSA</th>
+                                <th class="num">Net pay</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var row in _payrollHistory)
+                            {
+                                <tr>
+                                    <td class="strong">@row.PeriodName</td>
+                                    <td>@(row.Result.CurrencyCode == "ZWG" ? "ZiG" : row.Result.CurrencyCode)</td>
+                                    <td class="num">@Figure(row.Result.GrossEarningsAmount)</td>
+                                    <td class="num">@Figure(row.Result.PayeAfterCreditsAmount)</td>
+                                    <td class="num">@Figure(row.Result.NssaEmployeeAmount)</td>
+                                    <td class="num strong">@Figure(row.Result.NetPayAmount)</td>
+                                    <td>@row.RunStatus</td>
+                                    <td>
+                                        <a class="btn btn-quiet"
+                                           href="payroll/payslip/@row.Result.Id">Payslip</a>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted small">
+                        Every figure here is the persisted payroll result. An absent amount shows
+                        as "—": it could not be calculated, which is not the same as zero.
+                    </p>
+                }
                 break;
 
             case "Documents":
@@ -309,10 +434,17 @@ else
 @code {
     [Parameter] public Guid EmployeeId { get; set; }
 
+    private record PayrollHistoryRow(string PeriodName, string RunStatus, PayrollRunEmployee Result);
+
+    /// <summary>An absent figure is not zero, on this screen as everywhere else.</summary>
+    private static string Figure(decimal? amount) => amount?.ToString("N2") ?? "—";
+
+    private static string Days(decimal? days) => days?.ToString("N2") ?? "—";
+
     private static readonly string[] Tabs =
     {
         "Personal", "Employment", "Contract", "Earnings", "Deductions", "Statutory",
-        "Payment", "Projects", "Payroll history", "Payslips", "Documents"
+        "Payment", "Projects", "Leave", "Loans", "Payroll history", "Documents"
     };
 
     private string _tab = "Personal";
@@ -327,6 +459,10 @@ else
     private List<EmployeePaymentAccount> _accounts = new();
     private List<EmployeeProjectAssignment> _assignments = new();
     private List<EmployeeDocument> _documents = new();
+    private List<Domain.Leave.LeaveEntitlement> _leaveBalances = new();
+    private List<Domain.Leave.LeaveRequest> _leaveRequests = new();
+    private List<Domain.Loans.EmployeeLoan> _loans = new();
+    private List<PayrollHistoryRow> _payrollHistory = new();
     private Dictionary<Guid, string> _types = new();
     private Dictionary<Guid, string> _jobTitles = new();
     private Dictionary<Guid, string> _departments = new();
@@ -361,6 +497,41 @@ else
             .Where(a => a.EmployeeId == EmployeeId).ToListAsync();
         _documents = await Db.EmployeeDocuments.AsNoTracking()
             .Where(d => d.EmployeeId == EmployeeId).ToListAsync();
+
+        // Leave, loans and payroll history belong on the employee, not in three other modules the
+        // user has to visit to answer one question about one person.
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _leaveBalances = await Db.LeaveEntitlements.AsNoTracking()
+            .Include(e => e.Transactions)
+            .Include(e => e.LeaveType)
+            .Where(e => e.EmployeeId == EmployeeId &&
+                        e.LeaveYearStart <= today && e.LeaveYearEnd >= today)
+            .ToListAsync();
+
+        _leaveRequests = await Db.LeaveRequests.AsNoTracking()
+            .Include(r => r.LeaveType)
+            .Where(r => r.EmployeeId == EmployeeId)
+            .OrderByDescending(r => r.StartDate)
+            .Take(30)
+            .ToListAsync();
+
+        _loans = await Db.EmployeeLoans.AsNoTracking()
+            .Include(l => l.Transactions)
+            .Where(l => l.EmployeeId == EmployeeId)
+            .OrderByDescending(l => l.CreatedAt)
+            .ToListAsync();
+
+        var results = await Db.PayrollRunEmployees.AsNoTracking()
+            .Include(e => e.PayrollRun).ThenInclude(r => r!.PayrollPeriod)
+            .Where(e => e.EmployeeId == EmployeeId && !e.IsExcluded)
+            .OrderByDescending(e => e.PayrollRun!.PayrollPeriod!.PayDate)
+            .Take(24)
+            .ToListAsync();
+
+        _payrollHistory = results.Select(r => new PayrollHistoryRow(
+            r.PayrollRun?.PayrollPeriod?.Name ?? "Payroll run",
+            r.PayrollRun?.Status.ToString() ?? "—",
+            r)).ToList();
 
         _types = await Db.EmploymentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Name);
         _jobTitles = await Db.JobTitles.AsNoTracking().ToDictionaryAsync(j => j.Id, j => j.Name);

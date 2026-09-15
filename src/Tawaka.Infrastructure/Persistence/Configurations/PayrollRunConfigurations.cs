@@ -185,6 +185,7 @@ public sealed class PayrollLineConfigurations :
         builder.ToTable("PayrollCostAllocations");
         builder.HasKey(a => a.Id);
         builder.Property(a => a.ProjectName).HasMaxLength(200);
+        builder.Property(a => a.ProjectSiteName).HasMaxLength(200);
         builder.Property(a => a.DepartmentName).HasMaxLength(150);
         builder.Property(a => a.CurrencyCode).HasMaxLength(3).IsRequired();
         builder.Property(a => a.Percent)
@@ -192,6 +193,7 @@ public sealed class PayrollLineConfigurations :
         builder.Property(a => a.AllocatedCostAmount)
             .HasConversion(new ScaledDecimalConverter(MoneyScales.Money));
         builder.HasIndex(a => a.ProjectId);
+        builder.HasIndex(a => a.ProjectSiteId);
     }
 
     private static void Money<T>(

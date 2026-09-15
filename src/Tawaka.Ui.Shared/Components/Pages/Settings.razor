@@ -1,7 +1,11 @@
 @namespace Tawaka.Ui.Shared.Components.Pages
 @page "/settings"
+@using Tawaka.Application.Accounting
+@using Tawaka.Domain.Accounting
 @inject PayrollDbContext Db
 @inject UserSession Session
+@inject JournalExportService Journals
+@inject Tawaka.Infrastructure.Administration.BackupService Backups
 
 <h1>Settings</h1>
 
@@ -258,46 +262,169 @@ else if (_tab == "Earnings & deductions")
         </table>
     </div>
 }
-else if (_tab == "Users & roles")
+
+else if (_tab == "Accounting")
 {
     <div class="card">
-        <h2>Users</h2>
-        <table class="data">
-            <thead><tr><th>Username</th><th>Name</th><th>Roles</th><th>Active</th><th>Last sign-in</th></tr></thead>
-            <tbody>
-            @foreach (var user in _users)
+        <h2>General ledger mapping</h2>
+        <p class="muted small">
+            Each payroll amount needs an account, per currency. A USD wages account and a ZiG wages
+            account are different accounts in every chart of accounts this system will meet, and
+            mapping both to one is how a journal ends up mixing currencies.
+        </p>
+
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Amount</th><th>Currency</th><th>Account code</th><th>Account name</th>
+                    <th>Cost centre</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var currency in _currencies.Where(c => c.IsEnabled))
+                {
+                    @foreach (var type in Enum.GetValues<GlMappingType>())
+                    {
+                        var existing = _glMappings.FirstOrDefault(m =>
+                            m.MappingType == type && m.CurrencyCode == currency.CurrencyCode);
+                        var key = $"{currency.CurrencyCode}:{type}";
+
+                        <tr>
+                            <td class="strong">@Describe(type)</td>
+                            <td>@(currency.CurrencyCode == "ZWG" ? "ZiG" : currency.CurrencyCode)</td>
+                            <td>
+                                <input value='@Edit(key, "code", existing?.AccountCode)'
+                                       @onchange='e => SetEdit(key, "code", e.Value)' />
+                            </td>
+                            <td>
+                                <input value='@Edit(key, "name", existing?.AccountName)'
+                                       @onchange='e => SetEdit(key, "name", e.Value)' />
+                            </td>
+                            <td>
+                                <input value='@Edit(key, "cc", existing?.CostCentre)'
+                                       @onchange='e => SetEdit(key, "cc", e.Value)' />
+                            </td>
+                            <td>
+                                @if (Session.HasPermission(Permissions.SettingsEdit))
+                                {
+                                    <button class="btn btn-quiet"
+                                            @onclick="() => SaveMappingAsync(type, currency.CurrencyCode, key)">
+                                        Save
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            An amount with no mapped account is listed as unmapped on the journal rather than posted
+            to a default. A suspense posting nobody asked for is how payroll errors reach the trial
+            balance and stay there.
+        </p>
+    </div>
+}
+else if (_tab == "Backup & restore")
+{
+    <div class="card">
+        <h2>Backup</h2>
+        <div class="form-grid">
+            <div><label>Backup folder *</label><input @bind="_backupFolder" /></div>
+            <div><label>Note</label><input @bind="_backupNote" placeholder="Before October payroll" /></div>
+        </div>
+        <p class="muted small">
+            A backup is a consistent copy taken through SQLite's own backup mechanism, not a file
+            copy of a database that may be mid-write, plus a manifest naming the schema it was
+            taken on.
+        </p>
+        <div class="form-actions">
+            @if (Session.HasPermission(Permissions.SettingsEdit))
             {
-                <tr>
-                    <td class="mono">@user.Username</td>
-                    <td>@user.FullName</td>
-                    <td>@string.Join(", ", RoleNamesFor(user))</td>
-                    <td>@(user.IsActive ? "Yes" : "No")</td>
-                    <td>@(user.LastLoginAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                </tr>
+                <button class="btn btn-primary" @onclick="BackupAsync">Take a backup</button>
             }
-            </tbody>
-        </table>
+        </div>
+
+        @if (_lastBackup is not null)
+        {
+            <div class="alert alert-success">
+                <strong>Backup written.</strong>
+                @_lastBackup.BackupPath — @_lastBackup.Manifest.DatabaseBytes.ToString("N0") bytes,
+                schema @_lastBackup.Manifest.SchemaVersion.
+            </div>
+        }
+
+        <div class="detail-grid">
+            <div>
+                <span class="detail-label">Live database</span>
+                <span class="mono">@(_databasePath ?? "not file-backed")</span>
+            </div>
+        </div>
     </div>
 
     <div class="card">
-        <h2>Roles and segregation of duties</h2>
-        <table class="data">
-            <thead><tr><th>Role</th><th>Description</th><th class="num">Permissions</th></tr></thead>
-            <tbody>
-            @foreach (var role in _roles)
+        <h2>Restore</h2>
+        <div class="alert alert-warning">
+            <strong>Restoring replaces all current payroll data.</strong>
+            The database in use is set aside with a timestamped name first, so a failed restore can
+            be undone. Nothing is ever silently overwritten.
+        </div>
+
+        <div class="form-grid">
+            <div><label>Backup folder *</label><input @bind="_restoreFolder" /></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="InspectAsync">Check this backup</button>
+        </div>
+
+        @if (_inspection is not null)
+        {
+            @if (_inspection.Manifest is { } manifest)
             {
-                <tr>
-                    <td class="strong">@role.Name</td>
-                    <td>@role.Description</td>
-                    <td class="num">@_rolePermissionCounts.GetValueOrDefault(role.Id)</td>
-                </tr>
+                <div class="detail-grid">
+                    <div><span class="detail-label">Taken</span>@manifest.TakenAt.ToString("dd MMM yyyy HH:mm")</div>
+                    <div><span class="detail-label">By</span>@manifest.TakenBy</div>
+                    <div><span class="detail-label">Company</span>@(manifest.CompanyName ?? "—")</div>
+                    <div><span class="detail-label">Schema</span>@manifest.SchemaVersion</div>
+                    <div><span class="detail-label">Size</span>@manifest.DatabaseBytes.ToString("N0") bytes</div>
+                    <div><span class="detail-label">Note</span>@(manifest.Notes ?? "—")</div>
+                </div>
             }
-            </tbody>
-        </table>
-        <p class="muted">
-            Payroll.Calculate and Payroll.Approve are declared as conflicting permissions, so no
-            single role can both prepare and approve a payroll run.
-        </p>
+
+            @if (_inspection.Problems.Count > 0)
+            {
+                <div class="alert alert-error">
+                    <ul>
+                        @foreach (var problem in _inspection.Problems)
+                        {
+                            <li>@problem</li>
+                        }
+                    </ul>
+                </div>
+            }
+            else if (_inspection.CanRestore && Session.HasPermission(Permissions.SettingsEdit))
+            {
+                <div class="form-grid">
+                    <div>
+                        <label>
+                            <input type="checkbox" @bind="_restoreConfirmed" />
+                            I understand this replaces all current payroll data
+                        </label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="RestoreAsync">Restore</button>
+                </div>
+            }
+        }
+
+        @if (_restoreMessage is not null)
+        {
+            <div class="alert alert-success">
+                <strong>Restored.</strong> @_restoreMessage
+                Close and reopen Tawaka Payroll so it reads the restored database.
+            </div>
+        }
     </div>
 }
 
@@ -305,10 +432,22 @@ else if (_tab == "Users & roles")
     private static readonly string[] Tabs =
     {
         "Company profile", "Currencies", "Bank accounts", "Organisation",
-        "Earnings & deductions", "Users & roles"
+        "Earnings & deductions", "Accounting", "Backup & restore"
     };
 
     private string _tab = "Company profile";
+
+    private List<GlAccountMapping> _glMappings = new();
+    private readonly Dictionary<string, string> _glEdits = new();
+
+    private string _backupFolder = string.Empty;
+    private string _backupNote = string.Empty;
+    private string _restoreFolder = string.Empty;
+    private bool _restoreConfirmed;
+    private string? _databasePath;
+    private string? _restoreMessage;
+    private Tawaka.Infrastructure.Administration.BackupResult? _lastBackup;
+    private Tawaka.Infrastructure.Administration.RestoreInspection? _inspection;
     private ValidationResult? _validation;
     private bool _saved;
 
@@ -319,10 +458,6 @@ else if (_tab == "Users & roles")
     private List<CompanyBankAccount> _bankAccounts = new();
     private List<EarningType> _earningTypes = new();
     private List<DeductionType> _deductionTypes = new();
-    private List<User> _users = new();
-    private List<Role> _roles = new();
-    private Dictionary<Guid, int> _rolePermissionCounts = new();
-    private Dictionary<Guid, List<string>> _userRoleNames = new();
 
     private string _accountName = string.Empty;
     private string _bankName = string.Empty;
@@ -331,9 +466,9 @@ else if (_tab == "Users & roles")
     private string _accountCurrency = "USD";
     private PaymentPurpose _accountPurpose = PaymentPurpose.NetPay;
 
-    protected override void OnInitialized() => Load();
+    protected override async Task OnInitializedAsync() => await Load();
 
-    private void Load()
+    private async Task Load()
     {
         _company = Db.Companies.FirstOrDefault();
         if (_company is null)
@@ -351,23 +486,70 @@ else if (_tab == "Users & roles")
             .Where(t => t.CompanyId == _company.Id).OrderBy(t => t.DisplayOrder).ToList();
         _deductionTypes = Db.DeductionTypes.AsNoTracking()
             .Where(t => t.CompanyId == _company.Id).OrderBy(t => t.DisplayOrder).ToList();
-        _users = Db.Users.AsNoTracking().OrderBy(u => u.Username).ToList();
-        _roles = Db.Roles.AsNoTracking().OrderBy(r => r.Name).ToList();
-        _rolePermissionCounts = Db.RolePermissions.AsNoTracking()
-            .GroupBy(rp => rp.RoleId)
-            .Select(g => new { g.Key, Count = g.Count() })
-            .ToDictionary(x => x.Key, x => x.Count);
-
-        var roleNames = _roles.ToDictionary(r => r.Id, r => r.Name);
-        _userRoleNames = Db.UserRoles.AsNoTracking().ToList()
-            .GroupBy(ur => ur.UserId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(ur => roleNames.GetValueOrDefault(ur.RoleId, "—")).ToList());
+        _glMappings = await Journals.GetMappingsAsync(_company.Id);
+        _databasePath = Backups.DatabasePath();
     }
 
-    private IEnumerable<string> RoleNamesFor(User user) =>
-        _userRoleNames.TryGetValue(user.Id, out var names) ? names : Array.Empty<string>();
+    /// <summary>The pending edit for a cell, falling back to what is stored.</summary>
+    private string Edit(string key, string field, string? stored) =>
+        _glEdits.GetValueOrDefault($"{key}:{field}", stored ?? string.Empty);
+
+    private void SetEdit(string key, string field, object? value) =>
+        _glEdits[$"{key}:{field}"] = value?.ToString() ?? string.Empty;
+
+    private static string Describe(GlMappingType type) => type switch
+    {
+        GlMappingType.WagesExpense => "Gross wages (expense)",
+        GlMappingType.NetPayLiability => "Net pay owed to employees",
+        GlMappingType.PayeLiability => "PAYE withheld",
+        GlMappingType.AidsLevyLiability => "AIDS Levy withheld",
+        GlMappingType.NssaEmployeeLiability => "NSSA employee contribution withheld",
+        GlMappingType.NssaEmployerExpense => "NSSA employer contribution (expense)",
+        GlMappingType.NssaEmployerLiability => "NSSA employer contribution payable",
+        GlMappingType.EmployerStatutoryExpense => "Employer statutory costs (expense)",
+        GlMappingType.EmployerStatutoryLiability => "Employer statutory costs payable",
+        GlMappingType.OtherDeductionLiability => "Other deductions withheld",
+        _ => "Loan and advance recoveries"
+    };
+
+    private async Task SaveMappingAsync(GlMappingType type, string currency, string key)
+    {
+        var existing = _glMappings.FirstOrDefault(m =>
+            m.MappingType == type && m.CurrencyCode == currency);
+
+        var result = await Journals.SetMappingAsync(
+            _company!.Id, type, currency,
+            Edit(key, "code", existing?.AccountCode),
+            Edit(key, "name", existing?.AccountName),
+            Edit(key, "cc", existing?.CostCentre));
+
+        _validation = result.IsValid ? null : result;
+        _saved = result.IsValid;
+        Db.ChangeTracker.Clear();
+        await Load();
+    }
+
+    private async Task BackupAsync()
+    {
+        var result = await Backups.BackupAsync(_backupFolder, _backupNote);
+        _validation = result.Succeeded ? null : result.Validation;
+        _lastBackup = result.Succeeded ? result.Value : null;
+    }
+
+    private async Task InspectAsync()
+    {
+        _restoreMessage = null;
+        _inspection = await Backups.InspectAsync(_restoreFolder);
+    }
+
+    private async Task RestoreAsync()
+    {
+        var result = await Backups.RestoreAsync(_restoreFolder, _restoreConfirmed);
+        _validation = result.Succeeded ? null : result.Validation;
+        _restoreMessage = result.Succeeded
+            ? $"The previous database was kept as {result.Value}."
+            : null;
+    }
 
     private void SetDefaultPayroll(CompanyCurrency currency)
     {
@@ -405,7 +587,7 @@ else if (_tab == "Users & roles")
         await Db.SaveChangesAsync();
         _validation = null;
         _saved = true;
-        Load();
+        await Load();
     }
 
     private async Task SaveCurrenciesAsync()
@@ -437,7 +619,7 @@ else if (_tab == "Users & roles")
         await Db.SaveChangesAsync();
         _validation = null;
         _saved = true;
-        Load();
+        await Load();
     }
 
     private async Task AddBankAccountAsync()
@@ -477,6 +659,6 @@ else if (_tab == "Users & roles")
         _accountName = _bankName = _branchName = _accountNumber = string.Empty;
         _validation = null;
         _saved = true;
-        Load();
+        await Load();
     }
 }

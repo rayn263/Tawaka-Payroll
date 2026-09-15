@@ -14,7 +14,7 @@ namespace Tawaka.Infrastructure.Tests;
 /// The approve → finalise → paid → locked workflow, correction-run isolation, and the
 /// reproducibility guarantees that make a historical payroll defensible.
 /// </summary>
-public class WorkflowTests : StatutoryObligationTests
+public class WorkflowTests : PayrollFixtureBase
 {
     [Fact]
     public async Task A_run_cannot_be_finalised_before_it_is_approved()
@@ -195,7 +195,7 @@ public class WorkflowTests : StatutoryObligationTests
 /// Reproducibility: a historical payroll must survive later changes to salaries, tax rules and
 /// exchange rates, and a correction run must not disturb the original.
 /// </summary>
-public class ReproducibilityTests : StatutoryObligationTests
+public class ReproducibilityTests : PayrollFixtureBase
 {
     [Fact]
     public async Task The_rule_snapshot_used_by_a_run_is_retained_and_readable()

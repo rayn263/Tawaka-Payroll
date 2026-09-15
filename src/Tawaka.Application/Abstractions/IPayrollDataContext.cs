@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tawaka.Domain.Accounting;
 using Tawaka.Domain.Audit;
 using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Companies;
@@ -95,6 +96,8 @@ public interface IPayrollDataContext
     DbSet<EmployeeLoan> EmployeeLoans { get; }
     DbSet<LoanInstalment> LoanInstalments { get; }
     DbSet<LoanTransaction> LoanTransactions { get; }
+
+    DbSet<GlAccountMapping> GlAccountMappings { get; }
 
     DbSet<AppSetting> AppSettings { get; }
     DbSet<AuditLog> AuditLogs { get; }

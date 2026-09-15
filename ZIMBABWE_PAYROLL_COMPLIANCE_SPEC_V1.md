@@ -1,7 +1,7 @@
 # ZIMBABWE PAYROLL COMPLIANCE SPECIFICATION v1.0
 
 **Status:** DRAFT — awaiting approval. Not yet authoritative.
-**Research date:** 12 September 2026 · **Revised:** 15 September 2026 (Milestone 5)
+**Research date:** 12 September 2026 · **Revised:** 15 September 2026 (final release)
 **Scope:** Statutory basis for the Tawaka Payroll calculation engine.
 **Supersedes:** the compliance section of `docs/COMPLIANCE_ZIMBABWE.md` (that document remains as
 the architectural risk register; this document governs calculation).
@@ -59,9 +59,14 @@ in §1.4a, because "which tables exist" and "what is in them" are different ques
 first moved.
 
 **Rechecked again on 15 September 2026 during Milestone 5**, with the same result: `403` at
-CONNECT for `zimra.co.zw` and `veritaszim.net`. Three attempts across two milestones, all denied
-by the same policy. No rule has been upgraded. §1.4a now states explicitly what is and is not being
-claimed about the ZWG monthly table.
+CONNECT for `zimra.co.zw` and `veritaszim.net`. **Rechecked a fourth time for the final release**,
+adding `nssa.org.zw` and `rbz.co.zw`: all four denied. No rule has been upgraded at any point.
+§1.4a states explicitly what is and is not being claimed about the ZWG monthly table.
+
+**This is the position the release ships in.** Every statutory figure in the database is seed data
+graded Unverified or Supported, the live payroll gate is closed, and the application reports itself
+as COMPLIANCE-UNVERIFIED on every screen. Clearing it is the documented task in §26 — ten
+documents — and it is work for somebody with access to them, not for this software.
 
 ---
 

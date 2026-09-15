@@ -12,7 +12,7 @@ namespace Tawaka.Infrastructure.Tests;
 /// The payslip renders persisted results. It never recalculates, and its lines must reconcile
 /// exactly to the totals the engine stored.
 /// </summary>
-public class PayslipTests : StatutoryObligationTests
+public class PayslipTests : PayrollFixtureBase
 {
     private static PayslipBuilder Builder(Fixture fixture) =>
         new(fixture.Db.Context, fixture.Db.User, fixture.Db.Clock);
@@ -196,10 +196,10 @@ public class PayslipTests : StatutoryObligationTests
 }
 
 /// <summary>Reports read persisted results, reconcile, and never sum across currencies.</summary>
-public class PayrollReportTests : StatutoryObligationTests
+public class PayrollReportTests : PayrollFixtureBase
 {
     private static PayrollReportService Reports(Fixture fixture) =>
-        new(fixture.Db.Context, fixture.Db.User);
+        PayrollServices.For(fixture.Db).Reports;
 
     [Fact]
     public async Task The_summary_reconciles_to_the_register()

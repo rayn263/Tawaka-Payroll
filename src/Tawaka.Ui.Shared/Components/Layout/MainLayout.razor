@@ -2,6 +2,7 @@
 @inherits LayoutComponentBase
 @inject UserSession Session
 @inject AuthenticationService Auth
+@inject PayrollDbContext Db
 
 <div class="app">
     <aside class="sidebar">
@@ -25,6 +26,15 @@
             </div>
         </header>
         <main class="content">
+            @if (_isDemonstration)
+            {
+                <div class="alert alert-warning demo-banner">
+                    <strong>Demonstration data.</strong>
+                    This installation holds example employees and payrolls seeded for training and
+                    evaluation. It is not a real payroll and must not be used as one.
+                </div>
+            }
+
             @Body
         </main>
     </div>
@@ -32,6 +42,12 @@
 
 @code {
     [Parameter] public string CompanyName { get; set; } = "Tawaka Payroll";
+
+    private bool _isDemonstration;
+
+    protected override async Task OnInitializedAsync() =>
+        _isDemonstration = await Tawaka.Infrastructure.Seeding.DemoDataSeeder
+            .IsDemonstrationAsync(Db);
 
     private async Task SignOutAsync()
     {

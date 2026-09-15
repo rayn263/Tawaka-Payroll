@@ -215,7 +215,21 @@ Migration `TimeLeaveCalendarAndLoans`, 16 tables:
 
 ---
 
-## 10. Accounting *(Phase 3 — structure reserved now)*
+## 10. Accounting *(built — final release)*
+
+`GlAccountMappings`: `Id`, `CompanyId`, `MappingType`, **`CurrencyCode`**, `AccountCode`,
+`AccountName`, `CostCentre`, `IsActive`, `Notes`. Unique on
+(`CompanyId`, `MappingType`, `CurrencyCode`) — one account per amount **per currency**, because a
+USD wages account and a ZiG wages account are different accounts in every chart of accounts this
+system will meet (ADR-036). The journal itself is derived from persisted payroll results and is
+not stored.
+
+`PayrollCostAllocations` also gained `ProjectSiteId` and `ProjectSiteName` in this release, so
+labour cost reports by site as well as by project.
+
+---
+
+## 10a. Original Phase 3 accounting sketch *(superseded by §10)*
 
 | Table | Key columns |
 |---|---|

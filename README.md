@@ -2,24 +2,30 @@
 
 A professional, Windows-based payroll management system for businesses operating in Zimbabwe.
 
-> **Status: Milestone 5 (Time, attendance, leave and loans) complete — awaiting approval.**
-> Payroll now runs on controlled, approved inputs: timesheets with configurable overtime
-> categories, leave with entitlements and balances, a captured holiday calendar, and loans and
-> advances recovered through payroll. Each moves through Draft → Submitted → Approved → Locked, and
-> payroll consumes nothing that has not been approved. The snapshot each calculation ran on is
-> stored, hashed and sealed, so a completed run reproduces against the inputs it actually had.
-> **No live payroll can be produced**: every seeded statutory rule is unverified, so the engine
-> calculates in development mode only and the gate refuses approval. See `PROJECT_STATE.md`.
+> **Status: first complete release — awaiting review.**
+> The application supports the whole payroll journey: company setup, employees and effective-dated
+> contracts, projects and sites, time and overtime, leave, loans and advances, input approval,
+> calculation with a full audit trace, review, approval, finalisation, statutory obligations and
+> payments, payslips, reports, an accounting journal, locking and audit.
+>
+> **It reports itself as COMPLIANCE-UNVERIFIED and will not run a live payroll.** No statutory
+> figure in it has been read from ZIMRA, NSSA or a Statutory Instrument — every Zimbabwean official
+> domain is blocked from the build environment. Clearing that is a finite, documented task for
+> somebody with access to those documents: see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26.
+>
+> **The Windows desktop host has never been compiled or run.** The screens compile and are
+> type-checked on every build; none has been rendered. See `WINDOWS-BUILD.md`.
 
 ## Quick start
 
 ```bash
 apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
 ./build.sh                          # build the cross-platform solution
-./test.sh                           # 608 passing, 1 skipped (pending Q4a/Q22)
+./test.sh                           # 570 passing, 1 skipped (pending Q4a/Q22)
 ./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll                  # gate closed: calculation only
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules   # simulated verification: inputs, calculation, obligations
+dotnet run --project tools/Tawaka.Foundation.Cli -- --demo-data                # seed the worked example
 ```
 
 All screens live in `src/Tawaka.Ui.Shared` and compile anywhere. The Windows host builds from
@@ -63,16 +69,29 @@ It is built around four non-negotiable principles:
 | [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, verification status, per-rule confidence, compliance risks |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | **Where the project actually is**: phase, milestone, architecture as built, database version, rules implemented and verified, known issues, next milestone |
 | [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **Installing, running, verifying rules, running a payroll, backup and restore** |
+| [`WINDOWS-BUILD.md`](WINDOWS-BUILD.md) | Building and running the Windows desktop host, and what a first Windows run must establish |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision record (ADR) log |
 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business before or during development |
 
-## Verification gate
+## Release stage
 
-The payroll engine runs in LIVE mode only on rules graded 🟢 VERIFIED. **No rule currently holds
-that grade**, because every Zimbabwean official domain is blocked by this environment's network
-egress policy and no primary source could be read. Clearing the gate is a documented, finite task:
-see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 — ten documents, roughly one working day.
+The application reports one of four stages in the top bar of every screen, computed from the
+database rather than asserted (ADR-037):
+
+| | |
+|---|---|
+| DEVELOPMENT | Not configured for a business |
+| **COMPLIANCE-UNVERIFIED** | **Where this release ships.** Payroll calculates; live payroll is refused |
+| READY FOR CONTROLLED TESTING | Every rule verified. Run parallel payrolls and reconcile |
+| LIVE PAYROLL ENABLED | A recorded human decision, refused while any rule is unverified |
+
+The engine runs in LIVE mode only on rules graded 🟢 VERIFIED. **No rule currently holds that
+grade**, because every Zimbabwean official domain is blocked by this environment's network egress
+policy and no primary source could be read — rechecked four times across the project, most
+recently for this release. Clearing the gate is a documented, finite task: see
+`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 — ten documents, roughly one working day.
 
 ## Important compliance notice
 

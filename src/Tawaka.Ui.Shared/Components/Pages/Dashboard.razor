@@ -1,174 +1,257 @@
 @namespace Tawaka.Ui.Shared.Components.Pages
 @page "/"
-@inject PayrollDbContext Db
-@inject LivePayrollGate Gate
+@using Tawaka.Application.Administration
+@using Tawaka.Application.Release
+@inject DashboardService DashboardSource
 
-<h1>Dashboard</h1>
+@* Every figure here is computed from the database. There is no sample or placeholder number
+   anywhere: a dashboard showing a plausible figure nobody computed is worse than an empty one,
+   because it gets believed. *@
 
-@if (_company is not null && _company.LegalName == "Unconfigured Company")
+<div class="page-header">
+    <div>
+        <h1>Dashboard</h1>
+        <div class="subtitle">@(_data?.CompanyName ?? "Tawaka Payroll")</div>
+    </div>
+</div>
+
+@if (_data is null)
 {
-    <div class="alert alert-warning">
-        <strong>Company profile is not configured.</strong>
-        Enter your legal name, registration details and statutory identifiers in
-        <a href="settings">Settings</a> before running payroll.
+    <div class="card"><EmptyState Title="Loading…" /></div>
+}
+else
+{
+    <div class="card release-card @Css(_data.Readiness.Stage)">
+        <div class="page-header">
+            <div>
+                <h2>@_data.Readiness.StageLabel</h2>
+                <div class="subtitle">@_data.Readiness.StageExplanation</div>
+            </div>
+            <a class="btn btn-quiet" href="statutory/compliance">Compliance status</a>
+        </div>
+    </div>
+
+    <div class="stat-row">
+        <div class="stat">
+            <div class="stat-value">@_data.EmployeesActive</div>
+            <div class="stat-label">Active employees</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">@_data.PendingApprovals</div>
+            <div class="stat-label">Inputs awaiting approval</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">@_data.RunsAwaitingApproval</div>
+            <div class="stat-label">Payrolls awaiting approval</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">@_data.OutstandingObligations.Sum(o => o.Count)</div>
+            <div class="stat-label">Obligations outstanding</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">@_data.RunsLocked</div>
+            <div class="stat-label">Payrolls locked</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">@_data.ProjectsActive</div>
+            <div class="stat-label">Active projects</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Current payroll period</h2>
+        @if (_data.CurrentPeriod is null)
+        {
+            <EmptyState Title="No payroll period"
+                        Description="Create the period you want to process in Payroll." />
+        }
+        else
+        {
+            <div class="detail-grid">
+                <div><span class="detail-label">Period</span>@_data.CurrentPeriod.Name</div>
+                <div>
+                    <span class="detail-label">Dates</span>
+                    @_data.CurrentPeriod.StartDate.ToString("dd MMM") –
+                    @_data.CurrentPeriod.EndDate.ToString("dd MMM yyyy")
+                </div>
+                <div>
+                    <span class="detail-label">Pay date</span>
+                    @_data.CurrentPeriod.PayDate.ToString("dd MMM yyyy")
+                </div>
+                <div>
+                    <span class="detail-label">Period status</span>
+                    <StatusBadge Label="@_data.CurrentPeriod.Status.ToString()"
+                                 Tone="@(_data.CurrentPeriod.IsLocked ? "disabled" : "verified")" />
+                </div>
+                <div>
+                    <span class="detail-label">Latest run</span>
+                    @if (_data.LatestRun is { } run)
+                    {
+                        <span>
+                            Run @run.RunNumber
+                            <StatusBadge Label="@run.Status.ToString()" Tone="@RunTone(run.Status)" />
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="muted">none</span>
+                    }
+                </div>
+                <div>
+                    <span class="detail-label">Unapproved timesheets</span>
+                    @if (_data.UnapprovedInputsInCurrentPeriod > 0)
+                    {
+                        <span class="strong">@_data.UnapprovedInputsInCurrentPeriod</span>
+                    }
+                    else
+                    {
+                        <span class="muted">none</span>
+                    }
+                </div>
+            </div>
+            <div class="form-actions">
+                <a class="btn btn-secondary" href="payroll">Open payroll</a>
+                <a class="btn btn-quiet" href="time-leave/approvals">Approval queue</a>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Attention required</h2>
+        @if (_data.Warnings.Count == 0)
+        {
+            <EmptyState Title="Nothing needs attention" />
+        }
+        else
+        {
+            <ul class="warning-list">
+                @foreach (var warning in _data.Warnings)
+                {
+                    <li class="warning @warning.Tone">
+                        <span class="warning-icon">!</span>
+                        <span>@warning.Message</span>
+                        @if (warning.Link is not null)
+                        {
+                            <a href="@warning.Link">@(warning.Action ?? "Open")</a>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Statutory obligations outstanding</h2>
+        @if (_data.OutstandingObligations.Count == 0)
+        {
+            <EmptyState Title="Nothing outstanding"
+                        Description="Obligations appear once a payroll run is finalised." />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>Currency</th><th class="num">Obligations</th><th class="num">Outstanding</th>
+                    <th class="num">Overdue</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _data.OutstandingObligations)
+                {
+                    <tr>
+                        <td class="strong">@row.CurrencyLabel</td>
+                        <td class="num">@row.Count</td>
+                        <td class="num strong">@row.Outstanding.ToString("N2")</td>
+                        <td class="num @(row.Overdue > 0 ? "strong" : null)">
+                            @(row.Overdue > 0 ? row.Overdue.ToString() : "—")
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <p class="muted small">
+                Per currency. A USD liability is settled in USD and a ZiG liability in ZiG; the two
+                are never combined.
+            </p>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Contracted basic pay by currency</h2>
+        @if (_data.ContractedBasicByCurrency.Count == 0)
+        {
+            <EmptyState Title="No current contracts yet"
+                        Description="Add employees and their contracts to see committed payroll cost." />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>Currency</th><th class="num">Employees</th><th class="num">Contracted basic</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _data.ContractedBasicByCurrency)
+                {
+                    <tr>
+                        <td class="strong">@row.CurrencyLabel</td>
+                        <td class="num">@row.Employees</td>
+                        <td class="num">@row.Amount.ToString("N2")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <p class="muted small">
+                Contracted rates, not a payroll result. What was actually paid is in Reports.
+            </p>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Recent payroll activity</h2>
+        @if (_data.RecentActivity.Count == 0)
+        {
+            <EmptyState Title="No payroll runs yet" />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>When</th><th>Period</th><th class="num">Run</th><th>Status</th><th>By</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _data.RecentActivity)
+                {
+                    <tr>
+                        <td>@row.At.ToString("dd MMM yyyy HH:mm")</td>
+                        <td class="strong">@row.PeriodName</td>
+                        <td class="num">@row.RunNumber</td>
+                        <td>@row.Status</td>
+                        <td class="muted">@(row.Actor ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
     </div>
 }
 
-<div class="stat-row">
-    <div class="stat"><div class="stat-value">@_total</div><div class="stat-label">Total employees</div></div>
-    <div class="stat"><div class="stat-value">@_active</div><div class="stat-label">Active</div></div>
-    <div class="stat"><div class="stat-value">@_permanent</div><div class="stat-label">Permanent</div></div>
-    <div class="stat"><div class="stat-value">@_contract</div><div class="stat-label">Contract</div></div>
-    <div class="stat"><div class="stat-value">@_casual</div><div class="stat-label">Casual</div></div>
-    <div class="stat"><div class="stat-value">@_projects</div><div class="stat-label">Active projects</div></div>
-</div>
-
-@* Currency totals are reported separately and never added together. *@
-<div class="card">
-    <h2>Contracted monthly basic pay by currency</h2>
-    @if (_currencyTotals.Count == 0)
-    {
-        <EmptyState Title="No current contracts yet"
-                    Description="Add employees and their contracts to see committed payroll cost." />
-    }
-    else
-    {
-        <table>
-            <thead>
-            <tr><th>Currency</th><th class="num">Employees</th><th class="num">Monthly basic</th></tr>
-            </thead>
-            <tbody>
-            @foreach (var row in _currencyTotals)
-            {
-                <tr>
-                    <td>@(row.Currency == "ZWG" ? "ZiG" : row.Currency)</td>
-                    <td class="num">@row.Count</td>
-                    <td class="num"><MoneyText Amount="row.Total" Currency="row.Currency" /></td>
-                </tr>
-            }
-            </tbody>
-        </table>
-        <p class="muted">
-            Totals are shown per currency. USD and ZiG are never combined without an explicit,
-            recorded conversion.
-        </p>
-    }
-</div>
-
-<div class="card">
-    <h2>Attention required</h2>
-    @if (_warnings.Count == 0)
-    {
-        <EmptyState Title="Nothing needs attention" />
-    }
-    else
-    {
-        <ul class="warning-list">
-            @foreach (var warning in _warnings)
-            {
-                <li class="warning @warning.Tone">
-                    <span class="warning-icon">!</span>
-                    <span>@warning.Message</span>
-                    @if (warning.Link is not null)
-                    {
-                        <a href="@warning.Link">Open</a>
-                    }
-                </li>
-            }
-        </ul>
-    }
-</div>
-
 @code {
-    private record CurrencyTotal(string Currency, int Count, decimal Total);
-    private record Warning(string Message, string Tone, string? Link);
+    private DashboardData? _data;
 
-    private Company? _company;
-    private int _total, _active, _permanent, _contract, _casual, _projects;
-    private List<CurrencyTotal> _currencyTotals = new();
-    private readonly List<Warning> _warnings = new();
+    protected override async Task OnInitializedAsync() => _data = await DashboardSource.BuildAsync();
 
-    protected override void OnInitialized()
+    private static string Css(ReleaseStage stage) => stage switch
     {
-        _company = Db.Companies.AsNoTracking().FirstOrDefault();
+        ReleaseStage.LivePayrollEnabled => "live",
+        ReleaseStage.ReadyForControlledTesting => "testing",
+        ReleaseStage.ComplianceUnverified => "unverified",
+        _ => "development"
+    };
 
-        var employees = Db.Employees.AsNoTracking().ToList();
-        _total = employees.Count;
-        _active = employees.Count(e => e.Status == EmployeeStatus.Active);
-
-        var types = Db.EmploymentTypes.AsNoTracking().ToDictionary(t => t.Id, t => t.Code);
-        var current = Db.EmployeeContracts.AsNoTracking().Where(c => c.IsCurrent).ToList();
-
-        _permanent = current.Count(c => Code(types, c) == "Permanent");
-        _contract = current.Count(c => Code(types, c) == "Contract");
-        _casual = current.Count(c => Code(types, c) == "Casual");
-        _projects = Db.Projects.AsNoTracking().Count(p => p.Status == ProjectStatus.Active);
-
-        _currencyTotals = current
-            .GroupBy(c => c.PayrollCurrency)
-            .Select(g => new CurrencyTotal(g.Key, g.Count(), g.Sum(c => c.PrimaryRate ?? 0m)))
-            .OrderBy(r => r.Currency)
-            .ToList();
-
-        BuildWarnings(current, employees);
-    }
-
-    private static string Code(IReadOnlyDictionary<Guid, string> types, EmployeeContract contract) =>
-        types.TryGetValue(contract.EmploymentTypeId, out var code) ? code : string.Empty;
-
-    private void BuildWarnings(List<EmployeeContract> current, List<Employee> employees)
+    private static string RunTone(PayrollRunStatus status) => status switch
     {
-        var blocked = Db.StatutoryRules.AsNoTracking()
-            .Count(r => r.IsActive && r.VerificationStatus != VerificationStatus.Verified);
-        if (blocked > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{blocked} statutory rules are not verified. Live payroll is blocked until they are " +
-                "confirmed against the official sources.", "error", "statutory"));
-        }
-
-        var missingTax = employees.Count(e => e.Status == EmployeeStatus.Active &&
-            !Db.EmployeeStatutoryProfiles.AsNoTracking()
-                .Any(p => p.EmployeeId == e.Id && p.TaxNumber != null));
-        if (missingTax > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{missingTax} active employees have no tax number recorded.", "warning", "employees"));
-        }
-
-        var missingNssa = employees.Count(e => e.Status == EmployeeStatus.Active &&
-            !Db.EmployeeStatutoryProfiles.AsNoTracking()
-                .Any(p => p.EmployeeId == e.Id && p.NssaNumber != null));
-        if (missingNssa > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{missingNssa} active employees have no NSSA number recorded.", "warning", "employees"));
-        }
-
-        var soon = DateOnly.FromDateTime(DateTime.Today).AddDays(30);
-        var expiring = current.Count(c => c.EndDate.HasValue && c.EndDate.Value <= soon);
-        if (expiring > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{expiring} contracts expire within 30 days.", "warning", "employees"));
-        }
-
-        var withoutContract = employees.Count(e => e.Status == EmployeeStatus.Active &&
-                                                   current.All(c => c.EmployeeId != e.Id));
-        if (withoutContract > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{withoutContract} active employees have no current contract and cannot be paid.",
-                "error", "employees"));
-        }
-
-        var unverifiedEarnings = Db.EarningTypes.AsNoTracking()
-            .Count(t => t.IsActive && t.TreatmentVerificationStatus != VerificationStatus.Verified);
-        if (unverifiedEarnings > 0)
-        {
-            _warnings.Add(new Warning(
-                $"{unverifiedEarnings} earning types have an unverified statutory treatment.",
-                "warning", "settings"));
-        }
-    }
+        PayrollRunStatus.Approved or PayrollRunStatus.Finalised or PayrollRunStatus.Paid => "verified",
+        PayrollRunStatus.Review or PayrollRunStatus.Calculating => "supported",
+        PayrollRunStatus.Locked => "disabled",
+        _ => "disabled"
+    };
 }

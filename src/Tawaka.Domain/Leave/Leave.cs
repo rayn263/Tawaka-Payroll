@@ -81,9 +81,17 @@ public class LeaveType : AuditableEntity
 
     public bool RequiresApproval { get; set; } = true;
 
-    /// <summary>Whether a balance is carried into the next leave year.</summary>
+    /// <summary>
+    /// Whether a balance is carried into the next leave year.
+    /// <para>
+    /// <b>Configured but not yet acted on.</b> Nothing rolls a balance forward automatically:
+    /// a new leave year's opening balance is posted as a ledger adjustment with a reason. Doing it
+    /// automatically needs the carry-forward rules, which are part of compliance question Q32.
+    /// </para>
+    /// </summary>
     public bool CarriesForward { get; set; }
 
+    /// <summary>Cap on the carried balance. Recorded; not yet acted on — see above.</summary>
     public decimal? MaximumCarryForwardDays { get; set; }
 
     /// <summary>Whether weekends and public holidays count against the entitlement.</summary>

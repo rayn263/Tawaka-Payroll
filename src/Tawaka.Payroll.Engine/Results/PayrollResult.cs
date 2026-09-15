@@ -26,7 +26,8 @@ public sealed record EmployerCostResult(
 
 public sealed record CostAllocationResult(
     Guid? ProjectId, string? ProjectName, Guid? DepartmentId, string? DepartmentName,
-    decimal Percent, Money AllocatedCost);
+    decimal Percent, Money AllocatedCost, Guid? ProjectSiteId = null,
+    string? ProjectSiteName = null);
 
 /// <summary>
 /// The outcome of calculating one employee's pay. Immutable: once produced it is written to the

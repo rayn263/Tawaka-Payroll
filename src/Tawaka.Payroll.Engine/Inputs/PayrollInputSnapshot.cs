@@ -225,7 +225,7 @@ public sealed record StatutoryProfileInput
 /// <summary>How a project or department shares this employee's cost.</summary>
 public sealed record CostAllocationInput(
     Guid? ProjectId, string? ProjectName, Guid? ProjectSiteId, Guid? DepartmentId,
-    string? DepartmentName, decimal Percent);
+    string? DepartmentName, decimal Percent, string? ProjectSiteName = null);
 
 /// <summary>The statutory rules resolved for this calculation, plus anything that failed to resolve.</summary>
 public sealed record ResolvedRules

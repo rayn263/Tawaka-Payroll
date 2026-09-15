@@ -1,7 +1,12 @@
 @namespace Tawaka.Ui.Shared.Components.Layout
 @inject UserSession Session
+@inject PayrollDbContext Db
 
-@* Navigation is permission-trimmed: a user never sees a screen they cannot open. *@
+@* Ten modules, matching how a payroll office is actually organised. Related screens live together
+   as tabs inside a module rather than as separate navigation entries: a person looking for leave
+   balances should not have to know whether we filed them under Leave or under Employees.
+
+   Permission-trimmed throughout: a user never sees a module they cannot open. *@
 
 <nav>
     <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
@@ -16,24 +21,15 @@
         <NavLink href="payroll">Payroll</NavLink>
     }
 
-    @if (Session.HasPermission(Permissions.ProjectsView))
+    @if (Session.HasPermission(Permissions.TimeView) || Session.HasPermission(Permissions.LeaveView))
     {
-        <NavLink href="projects">Projects &amp; Sites</NavLink>
-    }
-
-    @if (Session.HasPermission(Permissions.TimeView))
-    {
-        <NavLink href="time">Time &amp; Attendance</NavLink>
-    }
-
-    @if (Session.HasPermission(Permissions.LeaveView))
-    {
-        <NavLink href="leave">Leave</NavLink>
-    }
-
-    @if (Session.HasPermission(Permissions.CalendarView))
-    {
-        <NavLink href="calendar">Holiday Calendar</NavLink>
+        <NavLink href="time-leave">
+            Time &amp; Leave
+            @if (_pendingApprovals > 0)
+            {
+                <span class="nav-count" title="Inputs awaiting approval">@_pendingApprovals</span>
+            }
+        </NavLink>
     }
 
     @if (Session.HasPermission(Permissions.LoansView))
@@ -41,17 +37,14 @@
         <NavLink href="loans">Loans &amp; Advances</NavLink>
     }
 
-    @if (Session.HasPermission(Permissions.TimeApprove) ||
-         Session.HasPermission(Permissions.LeaveApprove) ||
-         Session.HasPermission(Permissions.LoansApprove))
+    @if (Session.HasPermission(Permissions.ProjectsView))
     {
-        <NavLink href="approvals">Approvals</NavLink>
+        <NavLink href="projects">Projects &amp; Sites</NavLink>
     }
 
     @if (Session.HasPermission(Permissions.StatutoryView))
     {
-        <NavLink href="statutory">Statutory rules</NavLink>
-        <NavLink href="statutory/obligations">Statutory obligations</NavLink>
+        <NavLink href="statutory">Statutory</NavLink>
     }
 
     @if (Session.HasPermission(Permissions.ReportsRun))
@@ -63,4 +56,32 @@
     {
         <NavLink href="settings">Settings</NavLink>
     }
+
+    @if (Session.HasPermission(Permissions.AuditView) || Session.HasPermission(Permissions.UsersManage))
+    {
+        <NavLink href="administration">Administration</NavLink>
+    }
 </nav>
+
+@code {
+    private int _pendingApprovals;
+
+    protected override void OnInitialized()
+    {
+        // A count on the menu, because an unapproved timesheet that nobody notices becomes an
+        // employee who was not paid for work they did.
+        if (!Session.HasPermission(Permissions.TimeView) &&
+            !Session.HasPermission(Permissions.LeaveView))
+        {
+            return;
+        }
+
+        _pendingApprovals =
+            Db.Timesheets.AsNoTracking()
+                .Count(t => t.ApprovalStatus == InputApprovalStatus.Submitted) +
+            Db.LeaveRequests.AsNoTracking()
+                .Count(r => r.ApprovalStatus == InputApprovalStatus.Submitted) +
+            Db.EmployeeLoans.AsNoTracking()
+                .Count(l => l.ApprovalStatus == InputApprovalStatus.Submitted);
+    }
+}

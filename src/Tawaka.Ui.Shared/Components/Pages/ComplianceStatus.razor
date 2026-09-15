@@ -1,0 +1,259 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@using Tawaka.Application.Release
+@inject PayrollDbContext Db
+@inject ReleaseReadinessService Readiness
+@inject UserSession Session
+
+@* Where this installation actually stands, stated plainly. The stage is observed from the
+   database, not asserted: only the last step — enabling live payroll — is a decision somebody
+   records, and it is refused while any rule is unverified. *@
+
+<ValidationSummaryPanel Result="_validation" />
+
+@if (_readiness is not null)
+{
+    <div class="card">
+        <div class="page-header">
+            <div>
+                <h2>Release status</h2>
+                <div class="subtitle">@_readiness.StageExplanation</div>
+            </div>
+            <span class="mode-badge @Css(_readiness.Stage)">@_readiness.StageLabel</span>
+        </div>
+
+        <ol class="stage-list">
+            @foreach (var stage in Enum.GetValues<ReleaseStage>())
+            {
+                <li class="stage @(stage == _readiness.Stage ? "current" : null) @(stage < _readiness.Stage ? "passed" : null)">
+                    <span class="stage-label">@ReleaseReadinessService.Label(stage)</span>
+                    <span class="stage-text">@ReleaseReadinessService.Explain(stage)</span>
+                </li>
+            }
+        </ol>
+
+        <div class="stat-row">
+            <div class="stat">
+                <div class="stat-value">@_readiness.RulesVerified</div>
+                <div class="stat-label">Rules verified</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">@_readiness.RulesUnverified</div>
+                <div class="stat-label">Rules unverified</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">@_openQuestions.Count</div>
+                <div class="stat-label">Open compliance questions</div>
+            </div>
+        </div>
+    </div>
+
+    @if (_readiness.Blockers.Count > 0)
+    {
+        <div class="card">
+            <h2>What stands between this installation and the next stage</h2>
+            <table class="data">
+                <thead>
+                <tr><th>Area</th><th>Position</th><th>What clears it</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var blocker in _readiness.Blockers)
+                {
+                    <tr>
+                        <td class="strong">@blocker.Area</td>
+                        <td>
+                            @blocker.Summary
+                            @if (blocker.IsCompliance)
+                            {
+                                <span class="badge unverified">compliance</span>
+                            }
+                        </td>
+                        <td class="muted">@blocker.Remedy</td>
+                        <td>
+                            @if (blocker.Link is not null)
+                            {
+                                <a class="btn btn-quiet" href="@blocker.Link">Open</a>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="card">
+        <h2>Unresolved compliance questions</h2>
+        <p class="muted small">
+            These come from the rules and figures this installation could not establish. Each is a
+            question for a tax advisor or the authority concerned; none is a defect in the software,
+            and none has been worked around by assuming an answer.
+        </p>
+
+        @if (_openQuestions.Count == 0)
+        {
+            <EmptyState Title="No open questions recorded against configured rules" />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>Question</th><th>Affects</th><th>Consequence</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var question in _openQuestions)
+                {
+                    <tr>
+                        <td class="strong mono">@question.Key</td>
+                        <td>@question.Value.Description</td>
+                        <td class="muted">@question.Value.Consequence</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+        <p class="muted small">
+            The full register, with the evidence behind each question, is in
+            <code>ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md</code> §25.
+        </p>
+    </div>
+
+    @if (Session.HasPermission(Permissions.SettingsEdit))
+    {
+        <div class="card">
+            <h2>Live payroll</h2>
+            @if (_readiness.RulesUnverified > 0)
+            {
+                <div class="alert alert-warning">
+                    <strong>Live payroll cannot be enabled.</strong>
+                    @_readiness.RulesUnverified statutory rules have never been verified against an
+                    authoritative source. This is not a setting that can be overridden: a payroll
+                    calculated on unverified tables would produce figures nobody can stand behind.
+                </div>
+            }
+            else
+            {
+                <div class="form-grid">
+                    <div>
+                        <label>Reason *</label>
+                        <input @bind="_reason"
+                               placeholder="Parallel payrolls reconciled for September and October 2026" />
+                    </div>
+                </div>
+                <p class="muted small">
+                    Enable this only after running payrolls in parallel with the existing process
+                    and reconciling them. The decision and its reason are recorded.
+                </p>
+                <div class="form-actions">
+                    @if (_readiness.IsLivePayrollEnabled)
+                    {
+                        <button class="btn btn-secondary" @onclick="() => SetLiveAsync(false)">
+                            Disable live payroll
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" @onclick="() => SetLiveAsync(true)">
+                            Enable live payroll
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private record QuestionInfo(string Description, string Consequence);
+
+    private ReleaseReadiness? _readiness;
+    private ValidationResult? _validation;
+    private string _reason = string.Empty;
+    private Dictionary<string, QuestionInfo> _openQuestions = new();
+
+    /// <summary>
+    /// The register, kept here so the screen can explain a question code that appears against a
+    /// rule or an unresolved figure. The authoritative text lives in the compliance specification;
+    /// this is the one-line version a payroll officer needs in front of them.
+    /// </summary>
+    private static readonly Dictionary<string, QuestionInfo> Register = new()
+    {
+        ["Q1"] = new("Mixed USD and ZiG PAYE methodology",
+            "Employees paid in more than one currency cannot be calculated."),
+        ["Q2"] = new("AIDS Levy tax base", "Resolved: charged on tax after credits."),
+        ["Q4a"] = new("NSSA insurable earnings gross-up trigger",
+            "Affects employees whose earnings sit near the ceiling."),
+        ["Q5"] = new("NSSA eligibility for inferred employment types",
+            "Project, part-time and intern coverage is inferred rather than established."),
+        ["Q6"] = new("APWCS assessed rate and industry classification",
+            "Only NSSA can supply it, via Form WC50. Employer cost is incomplete without it."),
+        ["Q22"] = new("NSSA ceiling on weekly and fortnightly payroll",
+            "Three plausible methods differ roughly fourfold for weekly staff."),
+        ["Q24"] = new("Medical aid credit: 50% or 100% of contributions",
+            "The credit is seeded inactive rather than guessed."),
+        ["Q26"] = new("PAYE fixed-deduction column",
+            "Blocks verification of every PAYE table."),
+        ["Q28"] = new("Whether the bonus exemption applies to any bonus",
+            "Affects performance and project bonuses."),
+        ["Q29"] = new("Whether a ZWG monthly PAYE table is published",
+            "Monthly ZiG payroll has no table to resolve until this is answered."),
+        ["Q30"] = new("Whether the 2026 tables are the 2025 tables carried forward",
+            "Changes which document must be read to verify them."),
+        ["Q31"] = new("Overtime multipliers: contractual or NEC-mandated",
+            "Overtime refuses rather than paying an unverified rate."),
+        ["Q32"] = new("Statutory leave entitlements",
+            "Leave balances report as undetermined rather than as a number."),
+        ["Q33"] = new("Working-days and ordinary-hours divisor",
+            "Overtime for salaried staff and unpaid-leave deductions refuse without it.")
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Db.ChangeTracker.Clear();
+        _readiness = await Readiness.EvaluateAsync();
+
+        // Only the questions this installation actually trips over: the ones named by an
+        // unresolved figure, or attached to a leave type whose entitlement is undetermined.
+        var codes = Db.PayrollUnresolvedItems.AsNoTracking()
+            .Where(u => u.ComplianceQuestion != null)
+            .Select(u => u.ComplianceQuestion!)
+            .Distinct()
+            .ToList();
+
+        codes.AddRange(Db.LeaveTypes.AsNoTracking()
+            .Where(t => t.IsActive && t.ComplianceQuestion != null)
+            .Select(t => t.ComplianceQuestion!)
+            .Distinct()
+            .ToList());
+
+        // Plus the standing blockers, which apply whether or not a run has hit them yet.
+        codes.AddRange(new[] { "Q1", "Q6", "Q22", "Q26", "Q29", "Q30", "Q31", "Q32", "Q33" });
+
+        _openQuestions = codes
+            .Distinct()
+            .Where(Register.ContainsKey)
+            .OrderBy(code => code.Length).ThenBy(code => code)
+            .ToDictionary(code => code, code => Register[code]);
+    }
+
+    private static string Css(ReleaseStage stage) => stage switch
+    {
+        ReleaseStage.LivePayrollEnabled => "live",
+        ReleaseStage.ReadyForControlledTesting => "testing",
+        ReleaseStage.ComplianceUnverified => "unverified",
+        _ => "development"
+    };
+
+    private async Task SetLiveAsync(bool enabled)
+    {
+        var result = await Readiness.SetLivePayrollAsync(enabled, _reason);
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _reason = string.Empty;
+        }
+
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,95 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/time-leave"
+@page "/time-leave/{Tab}"
+@inject UserSession Session
+@inject NavigationManager Nav
+
+@* One module, four related things. Timesheets, leave, the calendar that both depend on, and the
+   queue that gates all of it belong to the same job and the same person; splitting them across
+   four navigation entries made the user find the seams in our data model. *@
+
+<div class="page-header">
+    <div>
+        <h1>Time &amp; Leave</h1>
+        <div class="subtitle">
+            Attendance, overtime, leave and the working calendar — the approved inputs payroll
+            reads.
+        </div>
+    </div>
+</div>
+
+<div class="tabs">
+    @foreach (var tab in _tabs)
+    {
+        <button class="tab @(_tab == tab.Key ? "active" : null)"
+                @onclick="() => Select(tab.Key)">@tab.Label</button>
+    }
+</div>
+
+@switch (_tab)
+{
+    case "timesheets":
+        <Timesheets />
+        break;
+
+    case "leave":
+        <LeaveManagement />
+        break;
+
+    case "calendar":
+        <HolidayCalendarPage />
+        break;
+
+    case "approvals":
+        <ApprovalQueue />
+        break;
+}
+
+@code {
+    [Parameter] public string? Tab { get; set; }
+
+    private record TabDefinition(string Key, string Label);
+
+    private readonly List<TabDefinition> _tabs = new();
+    private string _tab = "timesheets";
+
+    protected override void OnParametersSet()
+    {
+        _tabs.Clear();
+
+        if (Session.HasPermission(Permissions.TimeView))
+        {
+            _tabs.Add(new TabDefinition("timesheets", "Timesheets & overtime"));
+        }
+
+        if (Session.HasPermission(Permissions.LeaveView))
+        {
+            _tabs.Add(new TabDefinition("leave", "Leave"));
+        }
+
+        if (Session.HasPermission(Permissions.CalendarView))
+        {
+            _tabs.Add(new TabDefinition("calendar", "Holiday calendar"));
+        }
+
+        if (Session.HasPermission(Permissions.TimeApprove) ||
+            Session.HasPermission(Permissions.LeaveApprove) ||
+            Session.HasPermission(Permissions.LoansApprove))
+        {
+            _tabs.Add(new TabDefinition("approvals", "Approval queue"));
+        }
+
+        var requested = Tab?.ToLowerInvariant();
+        _tab = requested is not null && _tabs.Any(t => t.Key == requested)
+            ? requested
+            : _tabs.FirstOrDefault()?.Key ?? "timesheets";
+    }
+
+    private void Select(string tab)
+    {
+        _tab = tab;
+
+        // The tab is in the URL so a link to "the approval queue" actually opens it.
+        Nav.NavigateTo($"time-leave/{tab}", forceLoad: false, replace: true);
+    }
+}

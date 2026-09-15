@@ -120,3 +120,20 @@ if (args.Contains("--payroll"))
 {
     await Tawaka.Foundation.Cli.PayrollDemo.RunAsync(provider, args.Contains("--verify-rules"));
 }
+
+// --demo-data seeds the worked example: a construction business with a spread of employment
+// types, both currencies and the awkward cases. It refuses to touch a database that already has
+// employees, and stamps the installation as demonstration data.
+if (args.Contains("--demo-data"))
+{
+    using var demoScope = provider.CreateScope();
+    var seeded = await demoScope.ServiceProvider
+        .GetRequiredService<Tawaka.Infrastructure.Seeding.DemoDataSeeder>()
+        .SeedAsync();
+
+    Console.WriteLine();
+    Console.WriteLine(seeded
+        ? "DEMONSTRATION DATA SEEDED — eight employees across both currencies, with approved " +
+          "time, leave and a loan. The installation is stamped as demonstration data."
+        : "Demonstration data NOT seeded: this database already holds employees.");
+}

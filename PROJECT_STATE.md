@@ -1,9 +1,9 @@
 # Project State
 
 **Last updated:** 2026-09-15
-**Current phase:** Phase 1 — core payroll
-**Current milestone:** Milestone 5 — Time, attendance, leave and loans — **COMPLETE, awaiting approval**
-**Payroll mode:** DEVELOPMENT (live payroll is gated and currently blocked — see below)
+**Current phase:** First complete release
+**Current milestone:** Final release consolidation — **COMPLETE, awaiting review**
+**Release stage:** COMPLIANCE-UNVERIFIED (live payroll gated and blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
 commit as any change to structure, schema, rules or milestone status.
@@ -39,6 +39,18 @@ claimed**, and nothing in the codebase encodes it. See `ZIMBABWE_PAYROLL_COMPLIA
 §1.4a. Milestone 5 added **Q31** (overtime multipliers), **Q32** (statutory leave entitlements) and
 **Q33** (the salary-to-daily-rate divisor).
 
+## 1a. Release stage
+
+The application reports one of four stages, computed from the database rather than asserted
+(ADR-037), and shows it in the top bar of every screen:
+
+| Stage | Meaning |
+|---|---|
+| DEVELOPMENT | Not configured for a business. Demonstration only |
+| **COMPLIANCE-UNVERIFIED** | **Where this release ships.** Configured and usable; statutory rules never verified. Payroll calculates in development mode; live payroll refused |
+| READY FOR CONTROLLED TESTING | Every rule verified. Run parallel payrolls and reconcile. The furthest the software can take itself |
+| LIVE PAYROLL ENABLED | A recorded human decision, refused while any rule is unverified |
+
 ## 2. Architecture as built
 
 Clean architecture, dependencies inward only. Eleven projects:
@@ -47,9 +59,9 @@ Clean architecture, dependencies inward only. Eleven projects:
 |---|---|---|
 | `src/Tawaka.Domain` | Entities and value objects: `Money`, `CurrencyCode`, `DateRange`, currencies, statutory rules, audit, company, organisation, employees, earnings, security | yes |
 | `src/Tawaka.Payroll.Engine` | **The calculation engine**: pipeline, PAYE table, NSSA and **time/absence** calculators, rounding policy, input snapshot, immutable result, tracing | yes |
-| `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services, **timesheet, leave, calendar and loan services**, payroll snapshot builder, **snapshot store** and run service | yes |
-| `src/Tawaka.Infrastructure` | EF Core context, configurations, migrations, interceptors, seeding, DI | yes |
-| `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — layout, login, dashboard, employees, profile, projects, payroll runs and preview, payslip, statutory obligations, reports, statutory rules, **timesheets, leave, holiday calendar, loans, approval queue**, settings | yes |
+| `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services, timesheet, leave, calendar and loan services, payroll snapshot builder, snapshot store and run service, **reports and CSV export, journal export, release readiness, dashboard, audit query and user directory** | yes |
+| `src/Tawaka.Infrastructure` | EF Core context, configurations, migrations, interceptors, seeding, **backup and restore, demonstration data**, DI | yes |
+| `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — ten modules: dashboard, employees, payroll, time & leave, loans, projects, statutory, reports, settings, administration | yes |
 | `src/Tawaka.Ui.Desktop` | WPF host only: window, `BlazorWebView`, startup wiring (`net8.0-windows`) | **no — Windows only** |
 | `tools/Tawaka.Foundation.Cli` | Cross-platform check: migrate, seed, rule register, live gate, and `--payroll` to capture and approve a timesheet, leave and a loan, run a real calculation, print the approved inputs it consumed, the preview and an explanation, then walk the obligation lifecycle to a part payment | yes |
 | `tests/Tawaka.Domain.Tests` | Money, currency, date range, conversion provenance | yes |
@@ -65,8 +77,8 @@ and `Tawaka.Payroll.sln` (adds the Windows desktop host).
 | | |
 |---|---|
 | Provider | SQLite |
-| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913084801_PayrollRunsAndResults`, `20260915113432_StatutoryObligationsAndPayslips`, `20260915130007_TimeLeaveCalendarAndLoans` |
-| Tables | 72 |
+| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913084801_PayrollRunsAndResults`, `20260915113432_StatutoryObligationsAndPayslips`, `20260915130007_TimeLeaveCalendarAndLoans`, `20260915163143_AccountingAuditAndSiteCost` |
+| Tables | 73 |
 
 Milestone 1 (16): `AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
 `CurrencyTaxStrategyRules`, `EmployerLevyRules`, `ExchangeRates`, `NssaEligibilityRules`,
@@ -91,6 +103,9 @@ Milestone 5 (16): `Timesheets`, `TimeEntries`, `TimeEntryOvertimeLines`, `LeaveT
 `LeaveEntitlements`, `LeaveTransactions`, `LeaveRequests`, `HolidayCalendars`, `PublicHolidays`,
 `EmployeeLoans`, `LoanInstalments`, `LoanTransactions`, `OvertimeRules`, `PayDivisorRules`,
 `PayrollInputSnapshots`, `PayrollRunInputSources`.
+
+Final release (1): `GlAccountMappings`. `PayrollCostAllocations` also gained `ProjectSiteId` and
+`ProjectSiteName`, so labour cost is reportable by site as well as by project.
 
 **Company-ready:** every company-scoped table carries `CompanyId`, and `StatutoryRule` carries a
 nullable `CompanyId` so employer-specific rules (APWCS, NEC) can coexist with national ones. The
@@ -131,17 +146,21 @@ these calculates in development mode only.
 | Domain | 29 | 0 |
 | Application | 43 | 0 |
 | Payroll.Engine | 230 | 1 |
-| Infrastructure | 306 | 0 |
-| **Total** | **608** | **1** |
+| Infrastructure | 268 | 0 |
+| **Total** | **570** | **1** |
 
-Milestone 5 added 79 tests: timesheet capture and approval, period boundaries, overlapping leave,
-overtime pricing and refusal, project allocation totals, loan schedules and balance reconciliation,
-deduction limits, locked-input immutability, snapshot sealing and reproducibility, correction
-isolation, and approved-input-only consumption.
+The final release added the end-to-end journey (both currencies, plus the unverified-rule and
+mixed-currency refusals), the reconciliation suite, structural integrity tests, release-readiness
+tests, backup and restore tests, and demonstration-data guards.
 
-Two compliance cases were activated against the real engine now that their inputs exist: **TC-20**
-(advance recovered post-tax) and **TC-33** (the casual six-week engagement warning). One case
-remains skipped — **TC-18**, part-time NSSA ceiling treatment, which depends on Q4a/Q22.
+**A correction to the Milestone 5 figure.** That report said 608. Five test classes inherited
+`StatutoryObligationTests`, so xUnit re-ran its 18 tests in each of them: roughly 90 of the 608
+were the same tests executed repeatedly. The fixture is now a fact-free
+`PayrollFixtureBase`, so every number above is a distinct test. The honest comparison is 518
+distinct tests then against 570 now.
+
+One case remains skipped: **TC-18**, part-time NSSA ceiling treatment, which depends on compliance
+questions Q4a and Q22.
 
 ## 5a. What the engine does
 
@@ -208,22 +227,28 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
     The 10th for ZIMRA and NSSA and the 15th for ZIMDEF come from the seeded rules, which are
     Supported at best. A due date shown as overdue should be checked against the authority's own
     calendar until the deadline rules are verified.
-14. **`EarningType.DefaultMultiplier` is no longer read by the engine.** Overtime rates now live in
+14. **The Windows desktop host has never been compiled or run.** This is the single largest
+    unverified area in the release. `Tawaka.Ui.Shared` compiles and is type-checked on every
+    build, so the screens' C# is sound, but no window has been opened, no form submitted and no
+    page printed. `WINDOWS-BUILD.md` lists exactly what a first Windows run must establish.
+15. **Report export is CSV only** (ADR-039). Excel and a direct PDF writer are deliberate
+    omissions rather than gaps: payslips and reports print to A4 through the browser's print
+    dialogue, which also produces a PDF.
+16. **Leave carry-forward, overtime hour thresholds and payslip year-to-date figures are modelled
+    but not acted on.** Each is documented on the property itself so nobody mistakes the column
+    for behaviour.
+17. **`EarningType.DefaultMultiplier` is no longer read by the engine.** Overtime rates now live in
     dated, graded `OvertimeRules` (ADR-031), because a multiplier needs an effective date, a
     source, a verification status and a category, and a nullable column on an earning type carries
     none of those. The column is retained rather than dropped — renaming or removing an
     established column is not done casually — but it is a capture default only and must not be
     treated as authoritative.
-15. **Actor fields store the user id, and the screens show it raw.** `SubmittedBy`, `ApprovedBy`
-    and the rest hold the user's identifier, which renders as a GUID rather than a name. The
-    attribution is correct and auditable; it is the display that is poor. Resolving ids to names
-    at the point of display is a Milestone 6 task.
-16. **Leave that crosses a payroll period is apportioned by calendar days.** A five-day request
+18. **Leave that crosses a payroll period is apportioned by calendar days.** A five-day request
     spanning a month end contributes the proportion of its days that fall inside the period. Where
     a request's days were captured against working days rather than calendar days, that
     apportionment is an approximation; splitting the request at capture time would be exact and is
     the better answer if it proves to matter.
-17. **The casual engagement tally counts approved timesheet days.** An employee engaged without a
+19. **The casual engagement tally counts approved timesheet days.** An employee engaged without a
     timesheet does not accrue days towards the s.12(3) warning. For employment types that require
     a timesheet — which is every type carrying a threshold — this is complete; for any that do
     not, the warning would under-count.
@@ -238,10 +263,12 @@ drift out of sight, together with **Q29** and **Q30**. New this milestone: **Q31
 multipliers — contractual or NEC-mandated?), **Q32** (statutory leave entitlements) and **Q33** (the
 working-days and ordinary-hours divisor).
 
-## 8. Next milestone
+## 8. Status
 
-**Milestone 6 — Accounting export, reporting depth and operational polish.** Not started; see the
-Milestone 5 completion report for the proposed scope.
+**This is the first complete release.** No further development milestone is proposed. The
+application is feature-complete for its designed scope and awaits review, a Windows build, and the
+statutory verification work described in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26.
 
-Live payroll stays blocked throughout: the engine calculates in development mode only until the
-verification checklist in the compliance specification is cleared.
+Live payroll remains blocked: the engine calculates in development mode only until every required
+statutory rule has been confirmed against its authoritative source and a person records the
+decision to go live.

@@ -618,7 +618,8 @@ public sealed class PayrollCalculator
 
             context.AddAllocation(new CostAllocationResult(
                 allocation.ProjectId, allocation.ProjectName, allocation.DepartmentId,
-                allocation.DepartmentName, allocation.Percent, share));
+                allocation.DepartmentName, allocation.Percent, share,
+                allocation.ProjectSiteId, allocation.ProjectSiteName));
         }
     }
 }

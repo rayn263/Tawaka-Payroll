@@ -96,7 +96,16 @@ public class EarningType : AuditableEntity
 
     public EarningCalculationBasis DefaultCalculationBasis { get; set; } = EarningCalculationBasis.FixedAmount;
 
-    /// <summary>Contractual multiplier, e.g. 1.5 for overtime. Not a statutory rule.</summary>
+    /// <summary>
+    /// A capture default only, e.g. 1.5 for overtime.
+    /// <para>
+    /// <b>The payroll engine does not read this.</b> Overtime is priced from dated, graded
+    /// <c>OvertimeRules</c> (ADR-031), because a multiplier needs an effective date, a source, a
+    /// verification status and a category, and a nullable column here carries none of those. The
+    /// column is retained rather than dropped — removing an established column is not done
+    /// casually — but nothing should treat it as authoritative.
+    /// </para>
+    /// </summary>
     public decimal? DefaultMultiplier { get; set; }
 
     public string? GlAccountCode { get; set; }

@@ -371,3 +371,54 @@ storing the snapshot at all.
 "Which runs consumed this timesheet?" is a query rather than an archaeology exercise. The cost is a
 JSON document per employee per run, which is cheap against the alternative of not being able to
 answer a dispute.
+
+### ADR-036 — One accounting journal per currency, and unmapped amounts are reported
+**Status:** Accepted (Final release)
+**Context:** Payroll has to reach the general ledger. The temptation is a single journal with a
+currency column, and a default "suspense" account for anything unmapped.
+**Decision:** `JournalExportService` produces one `PayrollJournal` per currency, built from
+persisted results only. `GlAccountMapping` is keyed on (company, amount type, **currency**), so a
+USD wages account and a ZiG wages account are separate rows. An amount with no mapped account is
+listed in `Unmapped` and left off the journal entirely.
+**Consequences:** A journal balances within its own currency or it is reported as out of balance;
+it can never balance by mixing two. An unmapped amount is a visible gap an accountant fixes in
+Settings, rather than a suspense posting that reaches the trial balance and stays there.
+
+### ADR-037 — The release stage is observed, not asserted
+**Status:** Accepted (Final release)
+**Context:** "Is this system ready to run a real payroll?" had no answer in the application. The
+compliance position lived in a Markdown file, and the payroll mode badge said only
+DEVELOPMENT or LIVE.
+**Decision:** `ReleaseReadinessService` computes one of four stages — DEVELOPMENT,
+COMPLIANCE-UNVERIFIED, READY FOR CONTROLLED TESTING, LIVE PAYROLL ENABLED — from the database:
+whether the company is configured, whether employees exist, and how many statutory rules remain
+unverified. Only the final step is a stored decision, it requires a recorded reason, and it is
+**refused** while any rule is unverified. The stage is shown in the top bar of every screen and
+explained in full on Statutory → Compliance status.
+**Consequences:** Nobody can reach for a switch to make a late payroll go live. The software can
+take itself as far as "ready for controlled testing" and no further; going live is a person's
+decision after parallel running, recorded with their reason.
+
+### ADR-038 — Demonstration data is explicit, refusing and stamped
+**Status:** Accepted (Final release)
+**Context:** A worked example is genuinely useful for training and evaluation, and genuinely
+dangerous if it reaches a real company's database.
+**Decision:** `DemoDataSeeder` never runs on its own — it is invoked explicitly — refuses outright
+if any employee already exists, stamps the installation with `Data.IsDemonstration`, appends
+"[DEMONSTRATION]" to the company name, and creates its payroll period in Development mode. Every
+screen carries a banner while that stamp is present. It seeds no public holiday, because a holiday
+is a claim about Zimbabwean law that a seeder is in no position to make.
+**Consequences:** The example can be shown to a business without any chance of it becoming their
+payroll, and the guard is a test, not a convention.
+
+### ADR-039 — CSV first for export, and the browser's print dialogue for PDF
+**Status:** Accepted (Final release)
+**Context:** Reports and payslips have to leave the system. PDF generation means a library —
+QuestPDF, iText, a Chromium print pipeline — each bringing a dependency, a licence and a rendering
+surface with its own failure modes, in a release whose priority is consolidation.
+**Decision:** Every report exports to CSV, written to `Documents\Tawaka Payroll\Exports`. It opens
+in every spreadsheet an accountant owns, carries no formatting to go wrong, and needs no
+dependency. Payslips and reports print through `window.print()` against a print stylesheet, which
+produces a correct A4 document and a PDF via the print dialogue. No PDF library is taken.
+**Consequences:** Figures get out of the system today with no new risk. A direct PDF writer and an
+Excel export remain available as a later convenience, and are recorded as such rather than as gaps.

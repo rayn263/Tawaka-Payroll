@@ -1,6 +1,11 @@
 <Application x:Class="Tawaka.Ui.Desktop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        No StartupUri: the main window is created explicitly at the end of OnStartup, and only if
+        startup succeeded. The BlazorWebView binds App.Services statically, so the window must not
+        be constructed before that property is assigned — and a failed startup must not leave a
+        window on screen behind an error dialog.
+    -->
     <Application.Resources />
 </Application>

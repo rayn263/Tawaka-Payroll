@@ -502,3 +502,56 @@ table.data select { min-width: 120px; }
 
 h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
      color: var(--ink-muted); margin: 18px 0 8px; }
+
+/* ---- Release stage, dashboard and administration (final release) ---------- */
+
+.mode-badge.unverified { background: var(--unverified-bg); color: var(--unverified); }
+.mode-badge.testing { background: var(--supported-bg); color: var(--supported); }
+.mode-detail {
+    display: block; font-size: 10px; font-weight: 500; letter-spacing: 0; opacity: .85;
+    text-transform: none;
+}
+
+.release-card { border-left: 4px solid var(--line-strong); }
+.release-card.development { border-left-color: var(--disabled); }
+.release-card.unverified { border-left-color: var(--unverified); }
+.release-card.testing { border-left-color: var(--supported); }
+.release-card.live { border-left-color: var(--verified); }
+
+/* The four stages, shown as a path so it is obvious which one this installation
+   has reached and what the next one requires. */
+.stage-list { list-style: none; margin: 14px 0 0; padding: 0; counter-reset: stage; }
+.stage {
+    position: relative; padding: 10px 0 10px 34px; border-left: 2px solid var(--line);
+    counter-increment: stage;
+}
+.stage::before {
+    content: counter(stage); position: absolute; left: -11px; top: 12px;
+    width: 20px; height: 20px; border-radius: 50%; background: var(--surface);
+    border: 2px solid var(--line); color: var(--ink-muted);
+    font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.stage.passed::before { border-color: var(--verified); color: var(--verified); }
+.stage.current::before { border-color: var(--brand); background: var(--brand); color: #fff; }
+.stage.current { background: var(--brand-soft); }
+.stage-label { display: block; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+.stage-text { display: block; font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; }
+
+.nav-count {
+    display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px;
+    border-radius: 9px; background: var(--unverified); color: #fff;
+    font-size: 10.5px; font-weight: 700; text-align: center; line-height: 17px;
+}
+
+.detail-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 18px; margin: 12px 0;
+}
+.detail-label {
+    display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--ink-muted); margin-bottom: 2px;
+}
+
+.alert ul { margin: 6px 0 0; padding-left: 20px; }
+
+.demo-banner { margin-bottom: 18px; }

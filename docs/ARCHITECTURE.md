@@ -192,6 +192,37 @@ enum member names and the public engine interfaces (`PayrollInputSnapshot`, `Pay
 Fixed left sidebar, collapsible, with a top bar carrying the company name, active payroll period,
 current user and a global search. Permission-trimmed: a user never sees a node they cannot open.
 
+**As built at the final release**, consolidated to ten modules. Related screens are tabs inside a
+module rather than separate navigation entries: somebody looking for leave balances should not have
+to know whether they were filed under Leave or under Employees.
+
+```
+DASHBOARD                    (release stage, period, approvals, obligations, warnings, activity)
+
+EMPLOYEES                    (list, profile: personal, employment, contract, earnings, deductions,
+                              statutory, payment, projects, leave, loans, payroll history, documents)
+
+PAYROLL                      (periods, runs, calculate, preview, explain, approve, finalise,
+                              net wages paid, lock, payslip)
+
+TIME & LEAVE                 (timesheets & overtime, leave, holiday calendar, approval queue)
+
+LOANS & ADVANCES             (loans, advances, schedule, statement, repayment, reversal)
+
+PROJECTS & SITES
+
+STATUTORY                    (obligations & payments, statutory rules, compliance status)
+
+REPORTS                      (14 reports, filters, CSV export, accounting journal)
+
+SETTINGS                     (company, currencies, bank accounts, organisation,
+                              earnings & deductions, accounting, backup & restore)
+
+ADMINISTRATION               (audit trail, users & roles)
+```
+
+The original design sketch, kept for comparison:
+
 ```
 DASHBOARD
 
@@ -587,6 +618,16 @@ reference, partial payments and audited reversal; the approve → finalise → p
 the lock extended to a run's result rows; the seven core reports, each split by currency; the
 obligation register and reports screens (4 tables, 56 in total).
 
+**Final release — consolidation** (2026-09-15): the ten-module navigation; the four-stage release
+readiness gate shown on every screen (ADR-037); a dashboard computed entirely from real data; the
+audit trail screen with actors resolved to people; users and roles moved into Administration;
+general ledger mapping and a balanced journal per currency (ADR-036); six further reports —
+employee earnings, PAYE and AIDS Levy, NSSA, statutory payments, payroll inputs and snapshot, and
+payroll audit — with filters and CSV export (ADR-039); backup and restore with a manifest and a
+safe replacement; the explicit, refusing, stamped demonstration data set (ADR-038); payroll
+lifecycle actions in the UI; leave, loans and payroll history on the employee profile; and a
+hardened WPF startup with logging and error handling (1 table, 73 in total).
+
 **Milestone 5 — Time, attendance, leave and loans** (2026-09-15): controlled payroll inputs, each
 moving Draft → Submitted → Approved → Rejected/Returned → Locked with segregation of duties on
 every approval. Timesheets with per-day entries, project and site allocation and overtime by
@@ -598,25 +639,26 @@ prices approved time, leave and loans; the snapshot gained those inputs and is n
 and sealed. Five screens and an approval queue (16 tables, 72 in total).
 
 ### In progress
-- Nothing. Milestone 5 is complete and awaiting approval before Milestone 6 begins.
+- Nothing. This is the first complete release, awaiting review and a Windows build.
 
-### Pending — Phase 1
-Report file export (PDF, Excel, CSV) · dashboard warning cards beyond the counters · backup and
-restore.
+### Deliberately not built
+- **Bank payment files** and **ZIMRA/NSSA submission files**: their formats could not be obtained
+  from an authoritative source, and inventing a layout would put a guess in a file sent to a bank
+  or an authority. The data for both is modelled and queryable.
+- **Excel and direct PDF export**: CSV covers getting figures out, and printing produces A4 and a
+  PDF. Adding a PDF library was not worth the dependency in a consolidation release (ADR-039).
 
-### Pending — Phase 2
-Outstanding-obligation reminders · the full audit log screen · the reopen diff report · contract
-expiry warnings.
-
-### Pending — Phase 3
-Accounting/journal export · statutory return exports · bank payment files · advanced reporting ·
-multi-company · cloud backup · employee self-service.
+### Possible later work, not part of this release
+Multi-company · employee self-service · cloud backup · the reopen diff report ·
+outstanding-obligation reminders by email · bUnit component tests for the screens · leave
+carry-forward automation · overtime hour thresholds · payslip year-to-date figures.
 
 ### Known bugs and limitations
 See `PROJECT_STATE.md` §6. The significant ones: the desktop shell targets `net8.0-windows` and has
 never been compiled, because the build environment is Linux; and no Razor screen has been rendered
 or clicked, only type-checked.
 
-### Next development step
-Milestone 5 complete and pushed; awaiting approval. Next is **Milestone 6**, proposed in the
-Milestone 5 completion report and summarised in `PROJECT_STATE.md` §8.
+### Next step
+None proposed. The application is feature-complete for its designed scope. What remains is not
+development: build it on Windows, exercise the screens, verify the statutory rules against their
+source documents, and run parallel payrolls before anybody enables live payroll.

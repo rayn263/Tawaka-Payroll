@@ -6,7 +6,13 @@
 @inject NavigationManager Nav
 
 <div class="page-header">
-    <h1>Payroll</h1>
+    <div>
+        <h1>Payroll</h1>
+        <div class="subtitle">
+            Periods, runs and the lifecycle: calculate → review → approve → finalise →
+            net wages paid → locked.
+        </div>
+    </div>
 </div>
 
 <ValidationSummaryPanel Result="_validation" />
@@ -106,11 +112,48 @@
                     <td>@(run.CalculatedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
                     <td>
                         <a class="btn btn-secondary" href="payroll/preview/@run.Id">Preview</a>
+
+                        @* The lifecycle after approval, each step permissioned and each one
+                           meaning a different thing: finalising creates the statutory
+                           obligations, marking wages paid says nothing about the authorities,
+                           and locking freezes the figures and the inputs behind them. *@
+                        @if (run.Status == PayrollRunStatus.Approved &&
+                             Session.HasPermission(Permissions.PayrollFinalise))
+                        {
+                            <button class="btn btn-primary"
+                                    @onclick="() => FinaliseAsync(run.Id)">Finalise</button>
+                        }
+                        else if (run.Status == PayrollRunStatus.Finalised &&
+                                 Session.HasPermission(Permissions.PayrollRecordPayment))
+                        {
+                            <button class="btn btn-primary"
+                                    @onclick="() => MarkPaidAsync(run.Id)">Net wages paid</button>
+                        }
+                        else if (run.Status == PayrollRunStatus.Paid &&
+                                 Session.HasPermission(Permissions.PayrollLock))
+                        {
+                            <button class="btn btn-secondary"
+                                    @onclick="() => LockAsync(run.Id)">Lock</button>
+                        }
+
+                        @if (run.Status is PayrollRunStatus.Finalised or PayrollRunStatus.Paid
+                                 or PayrollRunStatus.Locked)
+                        {
+                            <a class="btn btn-quiet" href="reports/@run.Id">Reports</a>
+                        }
                     </td>
                 </tr>
             }
             </tbody>
         </table>
+        <p class="muted small">
+            Each step means something different. <strong>Approving</strong> accepts the figures;
+            <strong>finalising</strong> treats the money as withheld and creates the statutory
+            obligations; <strong>net wages paid</strong> records that employees were paid and says
+            nothing about the authorities; <strong>locking</strong> freezes the figures and the
+            approved inputs behind them. Corrections after a lock are made with a correction run,
+            never by editing history.
+        </p>
     }
 </div>
 
@@ -185,6 +228,30 @@
 
         _code = _name = string.Empty;
         _validation = null;
+        Load();
+    }
+
+    private async Task FinaliseAsync(Guid runId)
+    {
+        var result = await Runs.FinaliseAsync(runId);
+        _validation = result.IsValid ? null : result;
+        Db.ChangeTracker.Clear();
+        Load();
+    }
+
+    private async Task MarkPaidAsync(Guid runId)
+    {
+        var result = await Runs.MarkNetWagesPaidAsync(runId);
+        _validation = result.IsValid ? null : result;
+        Db.ChangeTracker.Clear();
+        Load();
+    }
+
+    private async Task LockAsync(Guid runId)
+    {
+        var result = await Runs.LockAsync(runId);
+        _validation = result.IsValid ? null : result;
+        Db.ChangeTracker.Clear();
         Load();
     }
 

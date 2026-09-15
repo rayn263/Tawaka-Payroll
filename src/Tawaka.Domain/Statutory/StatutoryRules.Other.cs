@@ -174,6 +174,11 @@ public class OvertimeRule : StatutoryRule
     /// <summary>
     /// Hours per period beyond which this category applies, where the rule is threshold-based.
     /// Null where the category is defined by the day rather than by a threshold.
+    /// <para>
+    /// <b>Recorded but not yet enforced.</b> Overtime is currently claimed by category on the
+    /// timesheet and priced by that category's multiplier; the engine does not reclassify hours
+    /// when a threshold is crossed. Which thresholds apply is part of compliance question Q31.
+    /// </para>
     /// </summary>
     public decimal? ThresholdHours { get; set; }
 

@@ -1,24 +1,34 @@
 @namespace Tawaka.Ui.Shared.Components.Shared
-@inject PayrollDbContext Db
+@using Tawaka.Application.Release
+@inject ReleaseReadinessService Readiness
 
-@* The payroll mode is shown at all times. Development mode must never be mistaken for live. *@
+@* The release stage is shown at all times, in every screen's top bar. A payroll system that lets
+   somebody forget its tax tables have never been checked is the one that gets used anyway. *@
 
-@if (_blockedRules > 0)
+@if (_readiness is not null)
 {
-    <span class="mode-badge development" title="@($"{_blockedRules} statutory rules are not verified")">
-        DEVELOPMENT MODE — live payroll blocked
+    <span class="mode-badge @CssClass" title="@_readiness.StageExplanation">
+        @_readiness.StageLabel
+        @if (_readiness.RulesUnverified > 0)
+        {
+            <span class="mode-detail">
+                @_readiness.RulesUnverified of @_readiness.RulesTotal rules unverified
+            </span>
+        }
     </span>
-}
-else
-{
-    <span class="mode-badge live">LIVE</span>
 }
 
 @code {
-    private int _blockedRules;
+    private ReleaseReadiness? _readiness;
 
-    protected override void OnInitialized() =>
-        _blockedRules = Db.StatutoryRules
-            .AsNoTracking()
-            .Count(r => r.IsActive && r.VerificationStatus != VerificationStatus.Verified);
+    private string CssClass => _readiness?.Stage switch
+    {
+        ReleaseStage.LivePayrollEnabled => "live",
+        ReleaseStage.ReadyForControlledTesting => "testing",
+        ReleaseStage.ComplianceUnverified => "unverified",
+        _ => "development"
+    };
+
+    protected override async Task OnInitializedAsync() =>
+        _readiness = await Readiness.EvaluateAsync();
 }

@@ -1,8 +1,13 @@
+using Tawaka.Application.Accounting;
+using Tawaka.Application.Administration;
 using Tawaka.Application.Calendars;
 using Tawaka.Application.Leave;
 using Tawaka.Application.Loans;
 using Tawaka.Application.Payroll;
 using Tawaka.Application.Statutory;
+using Tawaka.Application.Payslips;
+using Tawaka.Application.Release;
+using Tawaka.Application.Reports;
 using Tawaka.Application.Statutory.Obligations;
 using Tawaka.Application.Time;
 using Tawaka.Infrastructure.Persistence;
@@ -24,7 +29,14 @@ public sealed record PayrollServices(
     TimesheetService Timesheets,
     LeaveService Leave,
     HolidayCalendarService Calendars,
-    LoanService Loans)
+    LoanService Loans,
+    PayslipBuilder Payslips,
+    PayrollReportService Reports,
+    JournalExportService Journals,
+    UserDirectory Directory,
+    AuditQueryService Audit,
+    ReleaseReadinessService Readiness,
+    DashboardService Dashboard)
 {
     public static PayrollServices For(TestDatabase db) => For(db, db.User);
 
@@ -49,7 +61,17 @@ public sealed record PayrollServices(
             db.Context, snapshots, snapshotStore, obligations, timesheets, loans,
             user, db.Clock);
 
+        var directory = new UserDirectory(db.Context);
+        var readiness = new ReleaseReadinessService(db.Context);
+
         return new PayrollServices(
-            snapshots, snapshotStore, runs, obligations, timesheets, leave, calendars, loans);
+            snapshots, snapshotStore, runs, obligations, timesheets, leave, calendars, loans,
+            new PayslipBuilder(db.Context, user, db.Clock),
+            new PayrollReportService(db.Context, user, directory),
+            new JournalExportService(db.Context, user),
+            directory,
+            new AuditQueryService(db.Context, user, directory),
+            readiness,
+            new DashboardService(db.Context, readiness, directory));
     }
 }

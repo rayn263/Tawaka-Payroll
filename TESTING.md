@@ -12,7 +12,13 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **608 passing, 1 skipped, 0 failing.**
+Current result: **570 passing, 1 skipped, 0 failing, 0 warnings.**
+
+> **A correction to the Milestone 5 figure of 608.** Five test classes inherited
+> `StatutoryObligationTests`, so xUnit re-ran its 18 tests inside each of them — roughly 90 of
+> that 608 were the same tests executed repeatedly. The shared fixture is now a fact-free
+> `PayrollFixtureBase`, so every number reported here is a distinct test. The honest comparison is
+> 518 distinct tests at Milestone 5 against 570 now.
 
 ## The two kinds of test
 
@@ -52,6 +58,12 @@ They are the majority of the suite and the ones that protect the design.
 | `LoanService` | Instalments sum exactly to what is repayable, with rounding absorbed by the last one; the balance reconciles to the ledger after every movement; a deduction is capped at the outstanding balance; over-recovery needs a named approval with a reason; early settlement cancels the remaining schedule; a reversal restores the balance, keeps both rows and cannot be applied twice; the raiser cannot approve |
 | `TimeAndAbsenceCalculator` | Approved hours drive an hourly employee's basic pay; no approved time leaves it unresolved rather than zero; each overtime category is priced by its own rule and categories are never merged; a category with no rule refuses instead of paying plain time; overtime for a salaried employee without a divisor rule refuses with Q33; unpaid leave is docked at the daily rate and paid leave produces no line |
 | `PayrollSnapshotStore` | The snapshot is stored, hashed and sealed at calculation; it round-trips with its figures and currency intact; a tampered row is refused; serialisation is deterministic; approved inputs are queryable in both directions; a later loan repayment or timesheet correction does not change what a completed run recorded |
+| End-to-end | The whole journey in one test, for USD and for ZiG independently: company, employee, contract, earnings, project and site, time, overtime, leave, loan, approval by a second person, run, snapshot, calculate, explain, review, approve, finalise, obligations, net wages paid, statutory payment, payslip, reports, lock, and four separate attempts to modify a locked run — each refused |
+| Reconciliation | Payslip ↔ result, reports ↔ result, obligations ↔ result and ↔ their own lines, employer cost = gross + contributions, project allocations = total cost, deductions = total deductions, gross − deductions = net, journal balances and reconciles, and the stored snapshot still reproduces the figures it produced |
+| Integrity | Foreign keys enforced by SQLite itself; every company-scoped table carries a company; national rules are company-neutral; no currency column holds a blank |
+| Release readiness | A fresh installation reports DEVELOPMENT; configured-but-unverified reports COMPLIANCE-UNVERIFIED; verified and configured reaches READY FOR CONTROLLED TESTING and no further; live payroll is refused while any rule is unverified, whatever reason is given |
+| Backup and restore | A backup writes a manifest and restores cleanly; restoring without confirming is refused; a folder that is not a backup is refused; a backup whose database was altered is refused |
+| Demonstration data | It covers every employment type, both currencies and every earnings basis; it stamps the installation; it **refuses** to seed a database that already holds employees; its period is development mode; it seeds no public holiday it cannot evidence |
 | `PayrollRunService` | Historical reproducibility — a later salary increase and a future tax table both leave a calculated September untouched; an approved run cannot be silently recalculated; a locked run is immutable; a development run cannot be approved; a run with unresolved figures cannot be approved; the calculator cannot approve their own run |
 
 ### Statutory seed tests — against clearly labelled temporary rules

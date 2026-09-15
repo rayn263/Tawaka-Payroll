@@ -1,0 +1,69 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/statutory"
+@page "/statutory/{Tab}"
+@using Tawaka.Application.Release
+@inject UserSession Session
+@inject NavigationManager Nav
+@inject ReleaseReadinessService Readiness
+
+@* Rules, what is owed, what has been paid, and where compliance actually stands — in one place,
+   because the question "are we compliant" is answered by all four together. *@
+
+<div class="page-header">
+    <div>
+        <h1>Statutory</h1>
+        <div class="subtitle">
+            Rules and their evidence, obligations, payments and the compliance position.
+        </div>
+    </div>
+</div>
+
+<div class="tabs">
+    @foreach (var tab in _tabs)
+    {
+        <button class="tab @(_tab == tab.Key ? "active" : null)"
+                @onclick="() => Select(tab.Key)">@tab.Label</button>
+    }
+</div>
+
+@switch (_tab)
+{
+    case "obligations":
+        <StatutoryObligations />
+        break;
+
+    case "rules":
+        <StatutoryRules />
+        break;
+
+    case "compliance":
+        <ComplianceStatus />
+        break;
+}
+
+@code {
+    [Parameter] public string? Tab { get; set; }
+
+    private record TabDefinition(string Key, string Label);
+
+    private readonly List<TabDefinition> _tabs = new()
+    {
+        new TabDefinition("obligations", "Obligations & payments"),
+        new TabDefinition("rules", "Statutory rules"),
+        new TabDefinition("compliance", "Compliance status")
+    };
+
+    private string _tab = "obligations";
+
+    protected override void OnParametersSet()
+    {
+        var requested = Tab?.ToLowerInvariant();
+        _tab = requested is not null && _tabs.Any(t => t.Key == requested) ? requested : "obligations";
+    }
+
+    private void Select(string tab)
+    {
+        _tab = tab;
+        Nav.NavigateTo($"statutory/{tab}", forceLoad: false, replace: true);
+    }
+}

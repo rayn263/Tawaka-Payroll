@@ -639,7 +639,7 @@ public sealed class PayrollSnapshotBuilder
         var allocations = withProject.Select(a => new CostAllocationInput(
             a.ProjectId, a.ProjectName, a.ProjectSiteId, null, null,
             Math.Round((totalHours > 0m ? a.Hours : a.Days) / basis * 100m, 2,
-                MidpointRounding.AwayFromZero))).ToList();
+                MidpointRounding.AwayFromZero), a.ProjectSiteName)).ToList();
 
         // Rounding each share independently can leave the total a cent either side of 100%. The
         // largest share absorbs the difference, so allocations always sum to exactly 100.

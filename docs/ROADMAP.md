@@ -3,7 +3,20 @@
 **Document status:** Proposal, awaiting approval
 **Last updated:** 2026-09-15
 
-## Where we are (end of Milestone 5)
+## Where we are (first complete release)
+
+Phases 0, 1 and 2 are delivered, with the deliberate exclusions noted below. From Phase 3, GL
+mapping and the journal export (3.1) are delivered; statutory return exports (3.2) and bank payment
+files (3.3) are **deliberately not built** — their formats could not be obtained from an
+authoritative source, and inventing one would put a guess in a file sent to a bank or an authority.
+Multi-company (3.5), cloud backup (3.6) and self-service (3.7) are out of scope for this release.
+
+No further development milestone is proposed. What remains is a Windows build, exercising the
+screens, and the statutory verification work.
+
+---
+
+## Where we were (end of Milestone 5)
 
 Phase 0 is complete. In Phase 1, delivered: 1.1–1.13 in full, and 1.14 except file export — the
 reports render and print but do not yet write PDF, Excel or CSV.

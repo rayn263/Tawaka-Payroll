@@ -1,12 +1,15 @@
 @namespace Tawaka.Ui.Shared.Components.Pages
 @page "/reports"
 @page "/reports/{RunId:guid}"
+@using System.IO
 @using Tawaka.Application.Reports
 @using Tawaka.Domain.Statutory.Obligations
 @inject PayrollDbContext Db
 @inject PayrollReportService ReportService
+@inject Tawaka.Application.Accounting.JournalExportService Journals
 @inject UserSession Session
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 
 @* Reports read persisted payroll results. No figure on this screen is calculated here: every
    number comes from PayrollReportService, which aggregates stored rows and groups by currency
@@ -32,9 +35,20 @@
                 }
             </select>
         }
+        @if (Session.HasPermission(Permissions.ReportsExport))
+        {
+            <button class="btn btn-secondary" @onclick="ExportCsvAsync">Export CSV</button>
+        }
         <button class="btn btn-primary" @onclick="Print">Print</button>
     </div>
 </div>
+
+@if (_exported is not null)
+{
+    <div class="alert alert-success no-print">
+        <strong>Exported.</strong> @_exported
+    </div>
+}
 
 @if (!Session.HasPermission(Permissions.ReportsRun))
 {
@@ -75,14 +89,98 @@ else
         }
     </div>
 
+    <div class="card no-print">
+        <h2>Filter</h2>
+        <div class="form-grid">
+            <div>
+                <label>Employee</label>
+                <select @bind="_employeeId">
+                    <option value="@Guid.Empty">All</option>
+                    @foreach (var employee in _employees)
+                    {
+                        <option value="@employee.Id">@employee.FullName</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Department</label>
+                <select @bind="_departmentId">
+                    <option value="@Guid.Empty">All</option>
+                    @foreach (var department in _departments)
+                    {
+                        <option value="@department.Id">@department.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Project</label>
+                <select @bind="_projectId">
+                    <option value="@Guid.Empty">All</option>
+                    @foreach (var project in _projects)
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Site</label>
+                <select @bind="_siteId">
+                    <option value="@Guid.Empty">All</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.Id">@site.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Employment type</label>
+                <select @bind="_employmentType">
+                    <option value="">All</option>
+                    @foreach (var type in _employmentTypes)
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Currency</label>
+                <select @bind="_currency">
+                    <option value="">All</option>
+                    @foreach (var currency in _reportCurrencies)
+                    {
+                        <option value="@currency">@(currency == "ZWG" ? "ZiG" : currency)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Status</label>
+                <select @bind="_status">
+                    <option value="">All</option>
+                    <option value="calculated">Fully calculated</option>
+                    <option value="unresolved">With unresolved figures</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadAsync">Apply</button>
+            <button class="btn btn-quiet" @onclick="ClearFilterAsync">Clear</button>
+        </div>
+        <p class="muted small">
+            Filters narrow the population before anything is summed, so the totals shown are the
+            totals of what is shown.
+        </p>
+    </div>
+
     <div class="tabs no-print">
         @foreach (var tab in Tabs)
         {
-            <button class="tab @(_tab == tab ? "active" : null)" @onclick="() => _tab = tab">@tab</button>
+            var key = tab.Key;
+            <button class="tab @(_tab == key ? "active" : null)"
+                    @onclick="() => _tab = key">@tab.Label</button>
         }
     </div>
 
-    @if (_tab == "Currency summary" || _printing)
+    @if (_tab == "currency" || _printing)
     {
         <div class="card">
             <h2>Currency summary</h2>
@@ -117,7 +215,7 @@ else
         </div>
     }
 
-    @if (_tab == "Summary" || _printing)
+    @if (_tab == "summary" || _printing)
     {
         @foreach (var part in _reports.Summary)
         {
@@ -168,7 +266,7 @@ else
         }
     }
 
-    @if (_tab == "Register" || _printing)
+    @if (_tab == "register" || _printing)
     {
         @foreach (var part in _reports.Register)
         {
@@ -244,7 +342,7 @@ else
         }
     }
 
-    @if (_tab == "Deductions" || _printing)
+    @if (_tab == "deductions" || _printing)
     {
         @foreach (var part in _reports.Deductions)
         {
@@ -281,7 +379,7 @@ else
         }
     }
 
-    @if (_tab == "Employer cost" || _printing)
+    @if (_tab == "employer" || _printing)
     {
         @foreach (var part in _reports.EmployerCosts)
         {
@@ -322,7 +420,7 @@ else
         }
     }
 
-    @if (_tab == "Statutory" || _printing)
+    @if (_tab == "statutory" || _printing)
     {
         @if (_reports.Statutory.Count == 0)
         {
@@ -390,7 +488,7 @@ else
         }
     }
 
-    @if (_tab == "Project labour cost" || _printing)
+    @if (_tab == "project" || _printing)
     {
         @foreach (var part in _reports.ProjectLabourCost)
         {
@@ -426,20 +524,396 @@ else
             </div>
         }
     }
+
+    @if (_tab == "earnings" || _printing)
+    {
+        @foreach (var part in _reports.EmployeeEarnings)
+        {
+            <div class="card">
+                <h2>Employee earnings — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Employee</th><th>Code</th><th>Earning</th>
+                            <th class="num">Quantity</th><th class="num">Rate</th>
+                            <th class="num">Amount</th><th class="num">Taxable</th>
+                            <th class="num">Exempt</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="mono">@row.EmployeeNumber</td>
+                                <td class="strong">@row.EmployeeName</td>
+                                <td class="mono">@row.Code</td>
+                                <td>@row.Name</td>
+                                <td class="num">@Figure(row.Quantity)</td>
+                                <td class="num">@Figure(row.Rate)</td>
+                                <td class="num strong">@row.Amount.ToString("N2")</td>
+                                <td class="num">@row.Taxable.ToString("N2")</td>
+                                <td class="num">@row.Exempt.ToString("N2")</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="6" class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num strong">@part.Totals.Amount.ToString("N2")</td>
+                            <td class="num">@part.Totals.Taxable.ToString("N2")</td>
+                            <td class="num">@part.Totals.Exempt.ToString("N2")</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_tab == "tax" || _printing)
+    {
+        @foreach (var part in _reports.Tax)
+        {
+            <div class="card">
+                <h2>PAYE and AIDS Levy — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Employee</th><th>Tax number</th>
+                            <th class="num">Gross</th><th class="num">Taxable</th>
+                            <th class="num">PAYE before credits</th><th class="num">Credits</th>
+                            <th class="num">PAYE</th><th class="num">AIDS Levy</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="mono">@row.EmployeeNumber</td>
+                                <td class="strong">@row.EmployeeName</td>
+                                <td class="mono">@(row.TaxNumber ?? "—")</td>
+                                <td class="num">@Figure(row.Gross)</td>
+                                <td class="num">@Figure(row.Taxable)</td>
+                                <td class="num">@Figure(row.PayeBeforeCredits)</td>
+                                <td class="num">@Figure(row.Credits)</td>
+                                <td class="num strong">@Figure(row.PayeAfterCredits)</td>
+                                <td class="num">@Figure(row.AidsLevy)</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num">@Figure(part.Totals.Gross)</td>
+                            <td class="num">@Figure(part.Totals.Taxable)</td>
+                            <td class="num">@Figure(part.Totals.PayeBeforeCredits)</td>
+                            <td class="num">@Figure(part.Totals.Credits)</td>
+                            <td class="num strong">@Figure(part.Totals.PayeAfterCredits)</td>
+                            <td class="num">@Figure(part.Totals.AidsLevy)</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="muted small">
+                    The AIDS Levy is charged on PAYE after credits, so the two belong on one report:
+                    reading either alone invites the wrong conclusion.
+                </p>
+            </div>
+        }
+    }
+
+    @if (_tab == "nssa" || _printing)
+    {
+        @foreach (var part in _reports.Nssa)
+        {
+            <div class="card">
+                <h2>NSSA — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Employee</th><th>NSSA number</th>
+                            <th class="num">Insurable earnings</th>
+                            <th class="num">Employee</th><th class="num">Employer</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="mono">@row.EmployeeNumber</td>
+                                <td class="strong">@row.EmployeeName</td>
+                                <td class="mono">@(row.NssaNumber ?? "—")</td>
+                                <td class="num">@Figure(row.InsurableEarnings)</td>
+                                <td class="num strong">@Figure(row.EmployeeContribution)</td>
+                                <td class="num">@Figure(row.EmployerContribution)</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num">@Figure(part.Totals.InsurableEarnings)</td>
+                            <td class="num strong">@Figure(part.Totals.EmployeeContribution)</td>
+                            <td class="num">@Figure(part.Totals.EmployerContribution)</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_tab == "payments" || _printing)
+    {
+        @if (_reports.StatutoryPayments.Count == 0)
+        {
+            <div class="card">
+                <EmptyState Title="No statutory payments recorded against this run"
+                            Description="A payment is recorded against an approved obligation, with its reference." />
+            </div>
+        }
+        @foreach (var part in _reports.StatutoryPayments)
+        {
+            <div class="card">
+                <h2>Statutory payments — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Obligation</th><th>Authority</th><th>Date</th><th class="num">Amount</th>
+                            <th class="num">Principal</th><th class="num">Penalty/interest</th>
+                            <th>Method</th><th>Reference</th><th>Receipt</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr class="@(row.IsReversed ? "reversed-row" : null)">
+                                <td class="strong">@row.ObligationType</td>
+                                <td>@row.Authority</td>
+                                <td>@row.PaymentDate.ToString("dd MMM yyyy")</td>
+                                <td class="num strong">@row.Amount.ToString("N2")</td>
+                                <td class="num">@row.PrincipalAmount.ToString("N2")</td>
+                                <td class="num">@row.PenaltyOrInterest.ToString("N2")</td>
+                                <td>@row.PaymentMethod</td>
+                                <td class="mono">@row.PaymentReference</td>
+                                <td class="mono">@(row.ReceiptNumber ?? "—")</td>
+                                <td>
+                                    @if (row.IsReversed)
+                                    {
+                                        <span class="badge unverified" title="@row.ReversalReason">reversed</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">Total paid (@part.CurrencyLabel)</td>
+                            <td class="num strong">@part.Totals.Amount.ToString("N2")</td>
+                            <td class="num">@part.Totals.PrincipalAmount.ToString("N2")</td>
+                            <td class="num">@part.Totals.PenaltyOrInterest.ToString("N2")</td>
+                            <td colspan="4"></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="muted small">
+                    A reversed payment stays on the report and is excluded from the total: it
+                    settled nothing, and an auditor needs to see both the payment and its undoing.
+                </p>
+            </div>
+        }
+    }
+
+    @if (_tab == "inputs" || _printing)
+    {
+        <div class="card">
+            <h2>Payroll inputs and snapshot</h2>
+            @if (_reports.Inputs.Count == 0)
+            {
+                <EmptyState Title="No approved inputs recorded for this run" />
+            }
+            else
+            {
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Employee</th><th>Input</th><th>Record</th>
+                            <th>Approved by</th><th>Approved at</th><th>Snapshot</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in _reports.Inputs)
+                        {
+                            <tr>
+                                <td class="mono">@row.EmployeeNumber</td>
+                                <td class="strong">@row.EmployeeName</td>
+                                <td>@row.InputType</td>
+                                <td>@row.Description</td>
+                                <td class="muted">@(row.ApprovedBy ?? "—")</td>
+                                <td>@(row.ApprovedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                                <td class="mono small" title="@row.SnapshotHash">
+                                    @(row.SnapshotHash.Length >= 12 ? row.SnapshotHash[..12] : row.SnapshotHash)
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted small">
+                    Exactly which approved records each employee's figures were based on, and the
+                    hash of the sealed snapshot they were calculated from. This is the report an
+                    auditor reconstructing an old payroll needs.
+                </p>
+            }
+        </div>
+    }
+
+    @if (_tab == "audit" || _printing)
+    {
+        <div class="card">
+            <h2>Payroll audit</h2>
+            <table class="data">
+                <thead>
+                <tr><th>Stage</th><th>When</th><th>By</th><th>Detail</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _reports.Audit)
+                {
+                    <tr class="@(row.At is null ? "muted" : null)">
+                        <td class="strong">@row.Stage</td>
+                        <td>@(row.At?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                        <td>@(row.ActorName ?? "—")</td>
+                        <td class="muted">@(row.Detail ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <p class="muted small">
+                Field-level changes are in Administration → Audit trail. This is the run's own
+                lifecycle: who moved it to each stage, and when.
+            </p>
+        </div>
+    }
+
+    @if (_tab == "journal" || _printing)
+    {
+        @if (_journals.Count == 0)
+        {
+            <div class="card">
+                <EmptyState Title="No journal for this run"
+                            Description="A journal is produced from a calculated run once general ledger accounts are mapped in Settings." />
+            </div>
+        }
+        @foreach (var journal in _journals)
+        {
+            <div class="card">
+                <div class="page-header">
+                    <div>
+                        <h2>Accounting journal — @journal.CurrencyLabel</h2>
+                        <div class="subtitle">
+                            @journal.Reference · posting @journal.PostingDate.ToString("dd MMM yyyy")
+                        </div>
+                    </div>
+                    <StatusBadge Label="@(journal.IsBalanced ? "BALANCED" : "OUT OF BALANCE")"
+                                 Tone="@(journal.IsBalanced ? "verified" : "unverified")" />
+                </div>
+
+                @if (journal.Unmapped.Count > 0)
+                {
+                    <div class="alert alert-warning">
+                        <strong>Some amounts have no account mapped and are not on this journal.</strong>
+                        <ul>
+                            @foreach (var problem in journal.Unmapped)
+                            {
+                                <li>@problem</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (journal.Lines.Count > 0)
+                {
+                    <div class="scroll-x">
+                        <table class="data">
+                            <thead>
+                            <tr><th>Account</th><th>Name</th><th>Cost centre</th><th>Narrative</th>
+                                <th class="num">Debit</th><th class="num">Credit</th></tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var line in journal.Lines)
+                            {
+                                <tr>
+                                    <td class="mono">@line.AccountCode</td>
+                                    <td>@line.AccountName</td>
+                                    <td class="muted">@(line.CostCentre ?? "—")</td>
+                                    <td>@line.Narrative</td>
+                                    <td class="num">@(line.Debit == 0m ? "" : line.Debit.ToString("N2"))</td>
+                                    <td class="num">@(line.Credit == 0m ? "" : line.Credit.ToString("N2"))</td>
+                                </tr>
+                            }
+                            </tbody>
+                            <tfoot>
+                            <tr class="totals">
+                                <td colspan="4" class="strong">Total (@journal.CurrencyLabel)</td>
+                                <td class="num strong">@journal.TotalDebits.ToString("N2")</td>
+                                <td class="num strong">@journal.TotalCredits.ToString("N2")</td>
+                            </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+
+                <p class="muted small">
+                    One journal per currency, always. A journal mixing USD and ZiG would not balance
+                    in any meaningful sense, and an accountant posting it would have no way to
+                    correct it.
+                </p>
+            </div>
+        }
+    }
 }
 
 @code {
     [Parameter] public Guid? RunId { get; set; }
 
-    private static readonly string[] Tabs =
+    /// <summary>
+    /// Report key to display name. The key is what the exporter shapes, so the screen and the CSV
+    /// can never drift apart into two different ideas of what "the deductions report" is.
+    /// </summary>
+    private static readonly (string Key, string Label)[] Tabs =
     {
-        "Currency summary", "Summary", "Register", "Deductions", "Employer cost", "Statutory",
-        "Project labour cost"
+        ("currency", "Currency summary"),
+        ("summary", "Payroll summary"),
+        ("register", "Payroll register"),
+        ("earnings", "Employee earnings"),
+        ("deductions", "Deductions"),
+        ("tax", "PAYE & AIDS Levy"),
+        ("nssa", "NSSA"),
+        ("employer", "Employer cost"),
+        ("project", "Project & site labour cost"),
+        ("statutory", "Statutory obligations"),
+        ("payments", "Statutory payments"),
+        ("inputs", "Payroll inputs"),
+        ("audit", "Payroll audit"),
+        ("journal", "Accounting journal")
     };
 
     private List<PayrollRun> _runs = new();
     private PayrollRunReports? _reports;
-    private string _tab = "Currency summary";
+    private string _tab = "currency";
+
+    private List<Employee> _employees = new();
+    private List<Department> _departments = new();
+    private List<Project> _projects = new();
+    private List<ProjectSite> _sites = new();
+    private List<string> _employmentTypes = new();
+    private List<string> _reportCurrencies = new();
+    private List<Tawaka.Application.Accounting.PayrollJournal> _journals = new();
+
+    private Guid _employeeId;
+    private Guid _departmentId;
+    private Guid _projectId;
+    private Guid _siteId;
+    private string _employmentType = string.Empty;
+    private string _currency = string.Empty;
+    private string _status = string.Empty;
+    private string? _exported;
     private bool _printing;
 
     private Guid SelectedRunId { get; set; }
@@ -447,6 +921,21 @@ else
     protected override async Task OnParametersSetAsync()
     {
         var companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+
+        _employees = Db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == companyId).OrderBy(e => e.LastName).ToList();
+        _departments = Db.Departments.AsNoTracking()
+            .Where(d => d.CompanyId == companyId).OrderBy(d => d.Name).ToList();
+        _projects = Db.Projects.AsNoTracking()
+            .Where(p => p.CompanyId == companyId).OrderBy(p => p.Name).ToList();
+        _sites = Db.ProjectSites.AsNoTracking().OrderBy(s => s.Name).ToList();
+        _employmentTypes = Db.EmploymentTypes.AsNoTracking()
+            .Where(t => t.CompanyId == companyId).OrderBy(t => t.DisplayOrder)
+            .Select(t => t.Code).ToList();
+        _reportCurrencies = Db.CompanyCurrencies.AsNoTracking()
+            .Where(c => c.CompanyId == companyId && c.IsEnabled)
+            .OrderBy(c => c.SortOrder).Select(c => c.CurrencyCode).ToList();
+
         _runs = Db.PayrollRuns.AsNoTracking()
             .Include(r => r.PayrollPeriod)
             .Where(r => r.CompanyId == companyId && r.CalculatedAt != null)
@@ -474,7 +963,88 @@ else
             return;
         }
 
-        _reports = await ReportService.BuildAsync(SelectedRunId);
+        _exported = null;
+        _reports = await ReportService.BuildAsync(SelectedRunId, CurrentFilter());
+
+        _journals = Session.HasPermission(Permissions.ReportsExport)
+            ? (await Journals.BuildAsync(SelectedRunId)).ToList()
+            : new List<Tawaka.Application.Accounting.PayrollJournal>();
+    }
+
+    private ReportFilter CurrentFilter() => new()
+    {
+        EmployeeId = _employeeId == Guid.Empty ? null : _employeeId,
+        DepartmentId = _departmentId == Guid.Empty ? null : _departmentId,
+        ProjectId = _projectId == Guid.Empty ? null : _projectId,
+        ProjectSiteId = _siteId == Guid.Empty ? null : _siteId,
+        EmploymentTypeCode = string.IsNullOrWhiteSpace(_employmentType) ? null : _employmentType,
+        CurrencyCode = string.IsNullOrWhiteSpace(_currency) ? null : _currency,
+        IsCalculated = _status switch
+        {
+            "calculated" => true,
+            "unresolved" => false,
+            _ => null
+        }
+    };
+
+    private async Task ClearFilterAsync()
+    {
+        _employeeId = _departmentId = _projectId = _siteId = Guid.Empty;
+        _employmentType = _currency = _status = string.Empty;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Writes the current report to CSV beside the database, and tells the user where it went.
+    /// <para>
+    /// A file on disk rather than a browser download: this is a desktop application, the person
+    /// running it is on the machine, and a path they can open in Excel is more use than a file
+    /// that lands wherever the WebView decided.
+    /// </para>
+    /// </summary>
+    private async Task ExportCsvAsync()
+    {
+        if (_reports is null)
+        {
+            return;
+        }
+
+        var csv = _tab == "journal"
+            ? JournalCsv()
+            : PayrollReportCsv.Export(_reports, _tab);
+
+        var folder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Tawaka Payroll", "Exports");
+        Directory.CreateDirectory(folder);
+
+        var name = PayrollReportCsv.Name(_tab).Replace(' ', '-').ToLowerInvariant();
+        var path = Path.Combine(
+            folder, $"{name}-{_reports.PayDate:yyyy-MM}-{DateTime.Now:HHmmss}.csv");
+
+        await File.WriteAllTextAsync(path, csv);
+        _exported = path;
+    }
+
+    private string JournalCsv()
+    {
+        // One table per currency, exactly as the screen shows them.
+        var tables = _journals.Select(journal => new ExportTable(
+            $"Accounting journal ({journal.Reference})", journal.CurrencyCode,
+            new[] { "Account", "Name", "Cost centre", "Narrative", "Debit", "Credit" },
+            journal.Lines.Select(l => (IReadOnlyList<string>)new[]
+            {
+                l.AccountCode, l.AccountName, ReportExporter.Text(l.CostCentre), l.Narrative,
+                ReportExporter.Amount(l.Debit), ReportExporter.Amount(l.Credit)
+            }).Append(new[]
+            {
+                string.Empty, "TOTAL", string.Empty, string.Empty,
+                ReportExporter.Amount(journal.TotalDebits),
+                ReportExporter.Amount(journal.TotalCredits)
+            }).ToList())).ToList();
+
+        return ReportExporter.ToCsv(
+            "Accounting journal", _reports!.PeriodName, _reports.FilterDescription, tables);
     }
 
     /// <summary>
@@ -516,5 +1086,4 @@ else
         _printing = false;
     }
 
-    [Inject] private IJSRuntime Js { get; set; } = default!;
 }

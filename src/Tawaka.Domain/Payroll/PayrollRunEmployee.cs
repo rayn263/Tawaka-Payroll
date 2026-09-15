@@ -174,6 +174,15 @@ public class PayrollCostAllocation : Entity, IPayrollResultRow
     public Guid PayrollRunEmployeeId { get; set; }
     public Guid? ProjectId { get; set; }
     public string? ProjectName { get; set; }
+
+    /// <summary>
+    /// The site within the project, where the work was booked to one. Persisted alongside the
+    /// project because labour cost on a construction contract is asked about by site at least as
+    /// often as by project.
+    /// </summary>
+    public Guid? ProjectSiteId { get; set; }
+    public string? ProjectSiteName { get; set; }
+
     public Guid? DepartmentId { get; set; }
     public string? DepartmentName { get; set; }
     public decimal Percent { get; set; }

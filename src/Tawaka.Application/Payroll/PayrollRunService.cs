@@ -554,6 +554,8 @@ public sealed class PayrollRunService
             {
                 ProjectId = allocation.ProjectId,
                 ProjectName = allocation.ProjectName,
+                ProjectSiteId = allocation.ProjectSiteId,
+                ProjectSiteName = allocation.ProjectSiteName,
                 DepartmentId = allocation.DepartmentId,
                 DepartmentName = allocation.DepartmentName,
                 Percent = allocation.Percent,

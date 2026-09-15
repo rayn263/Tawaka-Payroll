@@ -1,0 +1,285 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/administration"
+@page "/administration/{Tab}"
+@using Tawaka.Application.Administration
+@using Tawaka.Domain.Audit
+@inject PayrollDbContext Db
+@inject AuditQueryService Audit
+@inject UserSession Session
+@inject NavigationManager Nav
+
+@* The audit trail and the user directory. Actors are shown as people, not identifiers: an auditor
+   asking who changed a salary is not helped by a GUID. *@
+
+<div class="page-header">
+    <div>
+        <h1>Administration</h1>
+        <div class="subtitle">Audit trail, users and roles.</div>
+    </div>
+</div>
+
+<div class="tabs">
+    @if (Session.HasPermission(Permissions.AuditView))
+    {
+        <button class="tab @(_tab == "audit" ? "active" : null)" @onclick='() => Select("audit")'>
+            Audit trail
+        </button>
+    }
+    @if (Session.HasPermission(Permissions.UsersManage))
+    {
+        <button class="tab @(_tab == "users" ? "active" : null)" @onclick='() => Select("users")'>
+            Users &amp; roles
+        </button>
+    }
+</div>
+
+@if (_tab == "audit" && Session.HasPermission(Permissions.AuditView))
+{
+    <div class="card">
+        <h2>Filter</h2>
+        <div class="form-grid">
+            <div><label>From</label><input type="date" @bind="_from" /></div>
+            <div><label>To</label><input type="date" @bind="_to" /></div>
+            <div>
+                <label>User</label>
+                <select @bind="_userId">
+                    <option value="">Anybody</option>
+                    @foreach (var user in _users)
+                    {
+                        <option value="@user.Id">@user.FullName (@user.Username)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Record type</label>
+                <select @bind="_entityName">
+                    <option value="">All</option>
+                    @foreach (var entity in _entityNames)
+                    {
+                        <option value="@entity">@entity</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Action</label>
+                <select @bind="_action">
+                    <option value="">All</option>
+                    @foreach (var action in Enum.GetValues<AuditAction>())
+                    {
+                        <option value="@action">@action</option>
+                    }
+                </select>
+            </div>
+            <div><label>Contains</label><input @bind="_search" placeholder="Value or reason" /></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadAsync">Search</button>
+            <button class="btn btn-quiet" @onclick="ClearAsync">Clear</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="page-header">
+            <h2>Audit trail</h2>
+            <span class="muted">@_entries.Count entries</span>
+        </div>
+
+        @if (_entries.Count == 0)
+        {
+            <EmptyState Title="Nothing matches"
+                        Description="Widen the dates or clear the filter." />
+        }
+        else
+        {
+            <div class="scroll-x">
+                <table class="data">
+                    <thead>
+                    <tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Field</th>
+                        <th>From</th><th>To</th><th>Reason</th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var entry in _entries)
+                    {
+                        <tr>
+                            <td>@entry.OccurredAt.ToString("dd MMM yyyy HH:mm:ss")</td>
+                            <td class="strong" title="@entry.ActorId">@entry.ActorName</td>
+                            <td><StatusBadge Label="@entry.Action.ToString()"
+                                             Tone="@Tone(entry.Action)" /></td>
+                            <td>
+                                @entry.EntityName
+                                <div class="muted small mono">@Short(entry.EntityId)</div>
+                            </td>
+                            <td>@(entry.FieldName ?? "—")</td>
+                            <td class="muted">@(entry.OldValue ?? "—")</td>
+                            <td class="strong">@(entry.NewValue ?? "—")</td>
+                            <td class="muted">@(entry.Reason ?? "—")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted small">
+                The trail is append-only: there is no code path in this application that updates or
+                deletes an audit entry. Entries record the actor's identifier as well as their name,
+                so the trail stays attributable even if a user record is later removed.
+            </p>
+        }
+    </div>
+}
+
+@if (_tab == "users" && Session.HasPermission(Permissions.UsersManage))
+{
+    <div class="card">
+        <h2>Users</h2>
+        <table class="data">
+            <thead>
+            <tr><th>Username</th><th>Name</th><th>Roles</th><th>Status</th>
+                <th>Last sign-in</th><th>Password</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var user in _users)
+            {
+                <tr>
+                    <td class="mono">@user.Username</td>
+                    <td class="strong">@user.FullName</td>
+                    <td>@string.Join(", ", RolesOf(user.Id))</td>
+                    <td>
+                        <StatusBadge Label="@(user.IsActive ? "Active" : "Disabled")"
+                                     Tone="@(user.IsActive ? "verified" : "disabled")" />
+                        @if (user.LockedUntil is { } until && until > DateTimeOffset.UtcNow)
+                        {
+                            <span class="badge unverified">locked until @until.ToString("HH:mm")</span>
+                        }
+                    </td>
+                    <td>@(user.LastLoginAt?.ToString("dd MMM yyyy HH:mm") ?? "never")</td>
+                    <td>
+                        @if (user.MustChangePassword)
+                        {
+                            <span class="badge supported">must change</span>
+                        }
+                        else
+                        {
+                            <span class="muted">set</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted small">
+            Passwords are stored as PBKDF2-HMAC-SHA256 hashes with a per-user salt. No password is
+            recoverable from this database, including the first administrator's.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>Roles and segregation of duties</h2>
+        <table class="data">
+            <thead>
+            <tr><th>Role</th><th>Description</th><th class="num">Permissions</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var role in _roles)
+            {
+                <tr>
+                    <td class="strong">@role.Name</td>
+                    <td class="muted">@role.Description</td>
+                    <td class="num">@_rolePermissionCounts.GetValueOrDefault(role.Id)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted small">
+            Conflicting permissions cannot be held by one role: calculating and approving payroll,
+            capturing and approving time, raising and approving a loan. The check is enforced when a
+            role is saved, not merely documented.
+        </p>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Tab { get; set; }
+
+    private string _tab = "audit";
+    private List<AuditEntryView> _entries = new();
+    private List<User> _users = new();
+    private List<Role> _roles = new();
+    private List<string> _entityNames = new();
+    private Dictionary<Guid, List<string>> _userRoles = new();
+    private Dictionary<Guid, int> _rolePermissionCounts = new();
+
+    private DateTime? _from = DateTime.Today.AddDays(-30);
+    private DateTime? _to = DateTime.Today;
+    private string _userId = string.Empty;
+    private string _entityName = string.Empty;
+    private string _action = string.Empty;
+    private string _search = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var requested = Tab?.ToLowerInvariant();
+        _tab = requested is "users" ? "users" : "audit";
+
+        _users = Db.Users.AsNoTracking().OrderBy(u => u.Username).ToList();
+        _roles = Db.Roles.AsNoTracking().OrderBy(r => r.Name).ToList();
+
+        _userRoles = Db.UserRoles.AsNoTracking()
+            .Join(Db.Roles.AsNoTracking(), ur => ur.RoleId, r => r.Id,
+                (ur, r) => new { ur.UserId, r.Name })
+            .ToList()
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Name).ToList());
+
+        _rolePermissionCounts = Db.RolePermissions.AsNoTracking()
+            .ToList()
+            .GroupBy(rp => rp.RoleId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        if (_tab == "audit" && Session.HasPermission(Permissions.AuditView))
+        {
+            _entityNames = await Audit.GetEntityNamesAsync();
+            await LoadAsync();
+        }
+    }
+
+    private void Select(string tab)
+    {
+        _tab = tab;
+        Nav.NavigateTo($"administration/{tab}", forceLoad: false, replace: true);
+    }
+
+    private IEnumerable<string> RolesOf(Guid userId) =>
+        _userRoles.TryGetValue(userId, out var roles) ? roles : Enumerable.Empty<string>();
+
+    private async Task LoadAsync()
+    {
+        _entries = (await Audit.QueryAsync(new AuditFilter
+        {
+            From = _from is { } from ? DateOnly.FromDateTime(from) : null,
+            To = _to is { } to ? DateOnly.FromDateTime(to) : null,
+            UserId = string.IsNullOrWhiteSpace(_userId) ? null : _userId,
+            EntityName = string.IsNullOrWhiteSpace(_entityName) ? null : _entityName,
+            Action = Enum.TryParse<AuditAction>(_action, out var action) ? action : null,
+            Search = string.IsNullOrWhiteSpace(_search) ? null : _search
+        })).ToList();
+    }
+
+    private async Task ClearAsync()
+    {
+        _from = DateTime.Today.AddDays(-30);
+        _to = DateTime.Today;
+        _userId = _entityName = _action = _search = string.Empty;
+        await LoadAsync();
+    }
+
+    private static string Short(string id) =>
+        Guid.TryParse(id, out var guid) ? guid.ToString()[..8] : id;
+
+    private static string Tone(AuditAction action) => action switch
+    {
+        AuditAction.Delete or AuditAction.Reject or AuditAction.Blocked => "unverified",
+        AuditAction.Approve or AuditAction.Finalise or AuditAction.VerifyRule => "verified",
+        AuditAction.Lock or AuditAction.Reopen => "supported",
+        _ => "disabled"
+    };
+}

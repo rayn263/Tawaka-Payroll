@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Tawaka.Domain.Accounting;
 using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Leave;
 using Tawaka.Domain.Loans;
@@ -335,5 +336,27 @@ public sealed class PayrollRunInputSourceConfiguration
 
         // The question this table exists to answer: which runs consumed this input?
         builder.HasIndex(s => new { s.InputType, s.InputId });
+    }
+}
+
+// ---- General ledger mapping ----------------------------------------------------------------
+
+public sealed class GlAccountMappingConfiguration : IEntityTypeConfiguration<GlAccountMapping>
+{
+    public void Configure(EntityTypeBuilder<GlAccountMapping> builder)
+    {
+        builder.ToTable("GlAccountMappings");
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.CurrencyCode).HasMaxLength(3).IsRequired();
+        builder.Property(m => m.AccountCode).HasMaxLength(60).IsRequired();
+        builder.Property(m => m.AccountName).HasMaxLength(200).IsRequired();
+        builder.Property(m => m.CostCentre).HasMaxLength(60);
+        builder.Property(m => m.Notes).HasMaxLength(1000);
+        builder.Property(m => m.CreatedBy).HasMaxLength(100);
+        builder.Property(m => m.ModifiedBy).HasMaxLength(100);
+
+        // One account per amount per currency: a second would leave the journal ambiguous, and a
+        // shared account across currencies is exactly what this system refuses to allow.
+        builder.HasIndex(m => new { m.CompanyId, m.MappingType, m.CurrencyCode }).IsUnique();
     }
 }

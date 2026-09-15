@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Employees;
+using Tawaka.Application.Accounting;
+using Tawaka.Application.Administration;
 using Tawaka.Application.Calendars;
 using Tawaka.Application.Leave;
 using Tawaka.Application.Loans;
@@ -11,7 +13,9 @@ using Tawaka.Application.Payslips;
 using Tawaka.Application.Reports;
 using Tawaka.Application.Statutory.Obligations;
 using Tawaka.Application.Security;
+using Tawaka.Application.Release;
 using Tawaka.Application.Statutory;
+using Tawaka.Infrastructure.Administration;
 using Tawaka.Infrastructure.Interceptors;
 using Tawaka.Infrastructure.Persistence;
 using Tawaka.Infrastructure.Seeding;
@@ -68,10 +72,20 @@ public static class DependencyInjection
         services.AddScoped<StatutoryObligationService>();
         services.AddScoped<PayslipBuilder>();
         services.AddScoped<PayrollReportService>();
+        services.AddScoped<JournalExportService>();
+
+        // Scoped, and cached for the life of the request: an audit page resolving the same few
+        // actors once per row would be a few hundred queries.
+        services.AddScoped<UserDirectory>();
+        services.AddScoped<AuditQueryService>();
+        services.AddScoped<ReleaseReadinessService>();
+        services.AddScoped<DashboardService>();
+        services.AddScoped<BackupService>();
 
         services.AddScoped<StatutoryRuleSeeder>();
         services.AddScoped<CompanySeeder>();
         services.AddScoped<SecuritySeeder>();
+        services.AddScoped<DemoDataSeeder>();
         services.AddScoped<ApplicationSeeder>();
 
         return services;

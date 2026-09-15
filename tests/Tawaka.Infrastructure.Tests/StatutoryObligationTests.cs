@@ -19,7 +19,16 @@ namespace Tawaka.Infrastructure.Tests;
 /// The statutory obligation state machine from <c>docs/MILESTONE_4_BRIEF.md</c> §2.
 /// The rule under test throughout: <b>approving a payroll never marks an obligation paid.</b>
 /// </summary>
-public class StatutoryObligationTests : EmployeeTestBase
+/// <summary>
+/// The shared payroll fixture: a configured company, one verified USD employee and a September
+/// period, ready to run.
+/// <para>
+/// Deliberately fact-free. Several suites need this scaffolding, and a base class carrying its own
+/// <c>[Fact]</c>s would have xUnit re-run every one of them in each derived suite — inflating the
+/// count and the runtime while proving nothing extra.
+/// </para>
+/// </summary>
+public abstract class PayrollFixtureBase : EmployeeTestBase
 {
     protected sealed record Fixture(
         TestDatabase Db, Guid CompanyId, Employee Employee, PayrollPeriod Period,
@@ -116,6 +125,10 @@ public class StatutoryObligationTests : EmployeeTestBase
         return run.Id;
     }
 
+}
+
+public class StatutoryObligationTests : PayrollFixtureBase
+{
     [Fact]
     public async Task Finalising_creates_obligations_calculated_and_deducted_but_not_approved_or_paid()
     {
