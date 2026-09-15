@@ -28,10 +28,14 @@
 
     @if (Session.HasPermission(Permissions.StatutoryView))
     {
-        <NavLink href="statutory">Statutory</NavLink>
+        <NavLink href="statutory">Statutory rules</NavLink>
+        <NavLink href="statutory/obligations">Statutory obligations</NavLink>
     }
 
-    <NavLink href="reports">Reports <span class="nav-pill">M4</span></NavLink>
+    @if (Session.HasPermission(Permissions.ReportsRun))
+    {
+        <NavLink href="reports">Reports</NavLink>
+    }
 
     @if (Session.HasPermission(Permissions.CompanyView))
     {

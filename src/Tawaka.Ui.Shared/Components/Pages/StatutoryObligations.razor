@@ -1,0 +1,238 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/statutory/obligations"
+@using Tawaka.Application.Statutory.Obligations
+@using Tawaka.Domain.Statutory.Obligations
+@inject PayrollDbContext Db
+@inject StatutoryObligationService Obligations
+@inject UserSession Session
+
+<div class="page-header">
+    <div>
+        <h1>Statutory obligations</h1>
+        <div class="subtitle">
+            What is owed, what has been withheld, what has been approved, and what has actually
+            been paid — tracked separately.
+        </div>
+    </div>
+    <a class="btn btn-quiet" href="statutory">Statutory rules</a>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+@if (_register.Count == 0)
+{
+    <div class="card">
+        <EmptyState Title="No obligations yet"
+                    Description="Obligations are created when a payroll run is finalised." />
+    </div>
+}
+else
+{
+    @foreach (var group in _register.GroupBy(o => o.CurrencyCode).OrderBy(g => g.Key))
+    {
+        <div class="card">
+            <h2>@(group.Key == "ZWG" ? "ZiG" : group.Key) obligations</h2>
+            <div class="scroll-x">
+                <table class="data">
+                    <thead>
+                    <tr>
+                        <th>Authority</th><th>Obligation</th><th>Due</th>
+                        <th class="num">Calculated</th><th>Deducted</th><th>Approved</th>
+                        <th class="num">Paid</th><th class="num">Outstanding</th>
+                        <th>Status</th><th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var obligation in group.OrderBy(o => o.ObligationType))
+                    {
+                        <tr>
+                            <td>@obligation.Authority</td>
+                            <td class="strong">@Describe(obligation.ObligationType)</td>
+                            <td>@(obligation.DueDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                            <td class="num">@obligation.CalculatedAmount.ToString("N2")</td>
+                            <td>
+                                @if (!obligation.IsDeductionApplicable)
+                                {
+                                    <span class="muted" title="Employer-borne: nothing is withheld from employees">n/a</span>
+                                }
+                                else
+                                {
+                                    @(obligation.IsDeducted ? "✔" : "✘")
+                                }
+                            </td>
+                            <td>@(obligation.IsApproved ? "✔" : "✘")</td>
+                            <td class="num">@obligation.PaidAmount.Amount.ToString("N2")</td>
+                            <td class="num strong">@obligation.Outstanding.Amount.ToString("N2")</td>
+                            <td><StatusBadge Label="@obligation.StatusOn(_today).ToString()"
+                                             Tone="@Tone(obligation.StatusOn(_today))" /></td>
+                            <td>
+                                @if (Session.HasPermission(Permissions.StatutoryRecordPayment))
+                                {
+                                    @if (!obligation.IsApproved)
+                                    {
+                                        <button class="btn btn-secondary"
+                                                @onclick="() => ApproveAsync(obligation.Id)">Approve</button>
+                                    }
+                                    else if (!obligation.IsPaid)
+                                    {
+                                        <button class="btn btn-primary"
+                                                @onclick="() => OpenPayment(obligation)">Record payment</button>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                    <tr class="totals">
+                        <td colspan="3" class="strong">Total (@(group.Key == "ZWG" ? "ZiG" : group.Key))</td>
+                        <td class="num strong">@group.Sum(o => o.CalculatedAmount).ToString("N2")</td>
+                        <td colspan="2"></td>
+                        <td class="num">@group.Sum(o => o.PaidAmount.Amount).ToString("N2")</td>
+                        <td class="num strong">@group.Sum(o => o.Outstanding.Amount).ToString("N2")</td>
+                        <td colspan="2"></td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="muted small">
+                Totals are per currency. A USD liability is settled in USD and a ZiG liability in
+                ZiG; the two are never combined.
+            </p>
+        </div>
+    }
+}
+
+@if (_paying is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _paying = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h2>Record payment</h2>
+                <div class="subtitle">
+                    @Describe(_paying.ObligationType) ·
+                    outstanding @_paying.CurrencyCode @_paying.Outstanding.Amount.ToString("N2")
+                </div>
+            </div>
+            <button class="btn btn-quiet" @onclick="() => _paying = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Amount *</label><input type="number" step="0.01" @bind="_amount" /></div>
+                <div><label>Payment date *</label><input type="date" @bind="_paymentDate" /></div>
+                <div>
+                    <label>Method *</label>
+                    <select @bind="_method">
+                        @foreach (var method in Enum.GetValues<StatutoryPaymentMethod>())
+                        {
+                            <option value="@method">@method</option>
+                        }
+                    </select>
+                </div>
+                <div><label>Payment reference *</label><input @bind="_reference" /></div>
+                <div><label>Authority receipt number</label><input @bind="_receipt" /></div>
+                <div><label>Penalty or interest included</label>
+                    <input type="number" step="0.01" @bind="_penalty" /></div>
+            </div>
+            <p class="muted small">
+                A payment reference is required. This is the only action that marks an obligation
+                paid — approving a payroll never does.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="RecordPaymentAsync">Record payment</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StatutoryObligation> _register = new();
+    private ValidationResult? _validation;
+    private StatutoryObligation? _paying;
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private Guid _companyId;
+
+    private decimal _amount;
+    private DateTime _paymentDate = DateTime.Today;
+    private StatutoryPaymentMethod _method = StatutoryPaymentMethod.BankTransfer;
+    private string _reference = string.Empty;
+    private string _receipt = string.Empty;
+    private decimal _penalty;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _register = await Obligations.GetRegisterAsync(_companyId);
+    }
+
+    private static string Describe(StatutoryObligationType type) => type switch
+    {
+        StatutoryObligationType.Paye => "PAYE",
+        StatutoryObligationType.AidsLevy => "AIDS Levy",
+        StatutoryObligationType.NssaPobsEmployee => "NSSA employee (POBS)",
+        StatutoryObligationType.NssaPobsEmployer => "NSSA employer (POBS)",
+        StatutoryObligationType.Apwcs => "APWCS",
+        StatutoryObligationType.Zimdef => "ZIMDEF levy",
+        StatutoryObligationType.StandardsDevelopmentFund => "Standards Development Fund",
+        StatutoryObligationType.NecEmployee => "NEC (employee)",
+        StatutoryObligationType.NecEmployer => "NEC (employer)",
+        _ => type.ToString()
+    };
+
+    private static string Tone(StatutoryObligationStatus status) => status switch
+    {
+        StatutoryObligationStatus.Paid => "verified",
+        StatutoryObligationStatus.Overdue => "unverified",
+        StatutoryObligationStatus.PartiallyPaid or StatutoryObligationStatus.Approved => "supported",
+        _ => "disabled"
+    };
+
+    private void OpenPayment(StatutoryObligation obligation)
+    {
+        _paying = obligation;
+        _amount = obligation.Outstanding.Amount;
+        _reference = string.Empty;
+        _receipt = string.Empty;
+        _penalty = 0m;
+    }
+
+    private async Task ApproveAsync(Guid obligationId)
+    {
+        var validation = await Obligations.ApproveAsync(obligationId);
+        _validation = validation.IsValid ? null : validation;
+        Db.ChangeTracker.Clear();
+        await LoadAsync();
+    }
+
+    private async Task RecordPaymentAsync()
+    {
+        if (_paying is null)
+        {
+            return;
+        }
+
+        var result = await Obligations.RecordPaymentAsync(new RecordPaymentRequest
+        {
+            ObligationId = _paying.Id,
+            Amount = _amount,
+            CurrencyCode = _paying.CurrencyCode,
+            PaymentDate = DateOnly.FromDateTime(_paymentDate),
+            PaymentMethod = _method,
+            PaymentReference = _reference,
+            AuthorityReceiptNumber = string.IsNullOrWhiteSpace(_receipt) ? null : _receipt,
+            PenaltyOrInterestIncluded = _penalty
+        });
+
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _paying = null;
+        }
+
+        Db.ChangeTracker.Clear();
+        await LoadAsync();
+    }
+}

@@ -1,6 +1,6 @@
 # Testing
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-15
 
 ## Running the tests
 
@@ -12,7 +12,7 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **408 passing, 6 skipped, 0 failing.**
+Current result: **529 passing, 3 skipped, 0 failing.**
 
 ## The two kinds of test
 
@@ -31,7 +31,7 @@ They are the majority of the suite and the ones that protect the design.
 | `LivePayrollGate` | Every blocking rule is listed, not just the first; the message names the exact rules and the remedy |
 | `CalculationTrace` | Rule, inputs, steps, raw value, rounding, output and conversion provenance are all captured |
 | `AuditInterceptor` | Creates, updates and deletes are recorded with user, timestamp, field, old value and new value; unchanged fields are not logged; the audit trail does not audit itself |
-| `PeriodLockInterceptor` | A locked period cannot be modified or deleted **at the data layer**; the record is unchanged after a rejected write; an authorised reopen requires a reason and works only inside its scope |
+| `PeriodLockInterceptor` | A locked period cannot be modified or deleted **at the data layer**; the record is unchanged after a rejected write; an authorised reopen requires a reason and works only inside its scope; a locked run's result rows and earning lines are refused too, while an unlocked run's figures stay editable (ADR-030) |
 | Migration and seeding | The documented tables are created; seeding is idempotent; decimals round-trip exactly through scaled-integer storage |
 | `PasswordHasher` | The hash never contains the password; the same password hashes differently each time; malformed stored hashes fail closed; weak iteration counts are refused and flagged for upgrade |
 | `AuthenticationService` | Correct credentials return the user's roles and permissions; an unknown user and a wrong password give the **same** message, so the form cannot enumerate accounts; repeated failures lock the account; every attempt is recorded |
@@ -42,6 +42,10 @@ They are the majority of the suite and the ones that protect the design.
 | `PayrollCalculator` | The full pipeline against the seed rules: TC-01 to TC-15, TC-19, TC-21 to TC-23 |
 | Unresolved behaviour | A missing or unverified rule produces an **absent** figure with its compliance question, never 0.00; weekly payroll refuses an undetermined ceiling application; monthly payroll is unaffected by it; a published-form table without its fixed-deduction column refuses; mixed-currency earnings refuse without an approved strategy |
 | Financial invariants | Across 19 salaries including every band boundary: gross less deductions equals net; totals reconcile to lines; statutory deductions never exceed gross; net pay is never negative; insurable earnings never exceed the ceiling; PAYE and net pay both rise monotonically with income; the levy is always 3% of tax after credits; employer contributions never reduce net pay; USD and ZiG cannot be added |
+| `StatutoryObligation` | The four states move independently; approving a payroll run never marks an obligation paid; an obligation cannot be approved before it is calculated and deducted; a payment cannot be recorded before approval; a payment without a reference, in the wrong currency, or exceeding the outstanding balance is refused; a partial payment leaves the correct balance; `IsPaid` is derived from payments and has no setter; a reversal needs a reason and retains the row; employer-borne obligations report deduction as not applicable; each obligation reconciles to its per-employee lines |
+| `PayslipBuilder` | The payslip renders persisted rows only; its totals reconcile to the stored run-employee totals; a legitimate zero renders `0.00` and an unresolved figure renders `—`; configured statutory categories appear even at zero; a USD and a ZiG payslip each carry their own currency throughout; a development-mode copy is watermarked and cannot be issued; re-issuing after a correction creates a new revision and supersedes the previous one without destroying it |
+| `PayrollReportService` | Every report groups by currency and no total spans currencies; the summary reconciles to the register; gross plus employer contributions equals total employer cost; the statutory report reconciles to the obligation register; project allocations sum to the total |
+| Workflow | Review → Approve → Finalise → Paid → Locked, each permissioned; the calculator cannot approve; a run cannot be finalised before approval; a correction run leaves the original run's figures and obligations untouched; a statutory payment is still possible after the run is locked |
 | `PayrollRunService` | Historical reproducibility — a later salary increase and a future tax table both leave a calculated September untouched; an approved run cannot be silently recalculated; a locked run is immutable; a development run cannot be approved; a run with unresolved figures cannot be approved; the calculator cannot approve their own run |
 
 ### Statutory seed tests — against clearly labelled temporary rules
@@ -89,13 +93,13 @@ them. Earnings are now rounded to currency precision on entry.
 `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §24 in one place, so the whole compliance surface appears
 in every test run.
 
-**Implemented (28 of 34).** Milestone 3 activated most of the catalogue against the real engine.
+**Implemented (31 of 34).** Milestone 3 activated most of the catalogue against the real engine;
+Milestone 4 activated TC-28, TC-29 and TC-29b against the statutory obligation register.
 `ComplianceTestCatalogue.cs` lists where each case now lives.
 
-**Still skipped (6):** TC-18 (part-time ceiling treatment, pending Q4a/Q22), TC-20 (advance
-recovery) and TC-33 (casual six-week warning) need modules not yet built; TC-28, TC-29 and TC-29b
-need the statutory obligation register in Milestone 4. They stay in the file so the outstanding
-work is counted every time the suite runs.
+**Still skipped (3):** TC-18 (part-time ceiling treatment, pending Q4a/Q22), TC-20 (advance
+recovery) and TC-33 (casual six-week warning) need modules not yet built. They stay in the file so
+the outstanding work is counted every time the suite runs.
 
 ## Running a payroll by hand
 
@@ -108,11 +112,20 @@ dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules
 `--payroll` creates two employees — one on USD 850, one on ZiG 15,000 — a September 2026 period,
 and calculates them through the engine, then prints the preview, one full calculation explanation
 and an approval attempt. It signs in as a payroll officer to calculate and as a manager to approve,
-so segregation of duties is exercised rather than described.
+so segregation of duties is exercised rather than described. Without `--verify-rules` the approval
+is refused and the run stops there, which is the live payroll gate doing its job: a development
+calculation can never produce a statutory liability that looks settled.
 
-`--verify-rules` additionally marks the seeded rules verified, as a real verification exercise
-would, so the engine can be seen calculating end to end. It is a demonstration switch: it does not
-make the rules correct, and the application never does this by itself.
+`--verify-rules` additionally marks the seeded rules verified and runs the period in LIVE mode, as
+a real verification exercise would, so the workflow can be seen end to end. It then finalises the
+run, prints the obligation register, approves USD PAYE, records a **part** payment against it and
+attempts a second payment with no reference — which is refused. The register is printed after each
+step so the four states can be watched moving independently, and the final balance is still
+outstanding.
+
+`--verify-rules` is a demonstration switch and says so loudly on every run: it does not make the
+rules correct, no rule has been verified against an authoritative source, and the application never
+does this by itself.
 
 ## Verifying the foundation by hand
 
@@ -138,7 +151,11 @@ and refuses to produce a live payroll until they are verified.
 - **Screen behaviour.** Every Razor component now compiles and is type-checked on each build
   (ADR-019), which catches a large class of mistakes, but no screen has been rendered or clicked.
   Data binding, navigation and form round-trips are unverified. Component tests using bUnit are
-  proposed for Milestone 3.
+  proposed for Milestone 5.
 - **The WPF host.** It targets `net8.0-windows` and has never been compiled here. It is now thin —
   a window, a WebView and startup wiring — so the untested surface is small.
-- **Payroll calculation.** None exists yet.
+- **Printing and PDF.** The payslip and the reports print through the browser's print dialogue
+  against a print stylesheet. The stylesheet is not exercised by any test; it needs a look on
+  Windows.
+- **Bank files and statutory submission files.** Not built, so not tested — the formats could not
+  be obtained from an authoritative source.

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Tawaka.Domain.Common;
+using Tawaka.Domain.Payroll;
 
 namespace Tawaka.Infrastructure.Interceptors;
 
@@ -41,14 +42,13 @@ public sealed class PeriodLockInterceptor : SaveChangesInterceptor
             return;
         }
 
-        foreach (var entry in context.ChangeTracker.Entries())
+        var changed = context.ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
+            .ToList();
+
+        foreach (var entry in changed)
         {
             if (entry.Entity is not ILockable lockable)
-            {
-                continue;
-            }
-
-            if (entry.State is not (EntityState.Modified or EntityState.Deleted))
             {
                 continue;
             }
@@ -62,7 +62,82 @@ public sealed class PeriodLockInterceptor : SaveChangesInterceptor
                     entry.Entity is Entity e ? e.Id.ToString() : "(unknown)");
             }
         }
+
+        GuardResultRows(context, changed);
     }
+
+    /// <summary>
+    /// Protects the figures underneath a locked run. The run row carries the lock, but the result
+    /// rows — the per-employee results, their lines, traces, unresolved items and allocations —
+    /// carry no status of their own, so without this a locked run's header would be frozen while
+    /// the numbers it locked could still be edited.
+    /// <para>
+    /// Statutory obligations and payments are deliberately excluded: settling an authority happens
+    /// after a run is locked, and must keep working.
+    /// </para>
+    /// </summary>
+    private static void GuardResultRows(DbContext context, List<EntityEntry> changed)
+    {
+        var runIds = changed
+            .Where(e => e.Entity is PayrollRunEmployee)
+            .Select(e => ((PayrollRunEmployee)e.Entity).PayrollRunId)
+            .ToHashSet();
+
+        var runEmployeeIds = changed
+            .Where(e => e.Entity is IPayrollResultRow)
+            .Select(e => ((IPayrollResultRow)e.Entity).PayrollRunEmployeeId)
+            .ToHashSet();
+
+        if (runIds.Count == 0 && runEmployeeIds.Count == 0)
+        {
+            return;
+        }
+
+        if (runEmployeeIds.Count > 0)
+        {
+            var parents = context.Set<PayrollRunEmployee>().AsNoTracking()
+                .Where(e => runEmployeeIds.Contains(e.Id))
+                .Select(e => e.PayrollRunId)
+                .ToList();
+
+            foreach (var parent in parents)
+            {
+                runIds.Add(parent);
+            }
+        }
+
+        var locked = context.Set<PayrollRun>().AsNoTracking()
+            .Where(r => runIds.Contains(r.Id) && r.Status == PayrollRunStatus.Locked)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        if (locked.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in changed)
+        {
+            var belongsToLockedRun = entry.Entity switch
+            {
+                PayrollRunEmployee employee => locked.Contains(employee.PayrollRunId),
+                IPayrollResultRow row => IsUnderLockedRun(context, row, locked),
+                _ => false
+            };
+
+            if (belongsToLockedRun)
+            {
+                throw new PeriodLockedException(
+                    entry.Entity.GetType().Name,
+                    entry.Entity is Entity e ? e.Id.ToString() : "(unknown)");
+            }
+        }
+    }
+
+    private static bool IsUnderLockedRun(
+        DbContext context, IPayrollResultRow row, IReadOnlySet<Guid> lockedRunIds) =>
+        context.Set<PayrollRunEmployee>().AsNoTracking()
+            .Any(e => e.Id == row.PayrollRunEmployeeId && lockedRunIds.Contains(e.PayrollRunId));
 
     private static bool WasLockedWhenLoaded(EntityEntry entry, ILockable current)
     {

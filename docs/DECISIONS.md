@@ -237,3 +237,63 @@ workforce.
 and persisted to the run. The preview aggregates and filters stored results; it performs no payroll
 arithmetic.
 **Consequences:** What the user sees is what was calculated, traced and stored.
+
+### ADR-027 — A statutory obligation has four independent states, and paid is derived
+**Status:** Accepted (Milestone 4)
+**Context:** A single `Status` column forces a real position — *calculated, withheld from the
+employee, authorised by the director, not yet paid to ZIMRA* — into one word, and the word chosen
+is usually the optimistic one. The brief is explicit that the system must never say a tax was paid
+when it was not.
+**Decision:** `StatutoryObligation` carries four independent flags — `IsCalculated`, `IsDeducted`,
+`IsApproved` — each with its own actor and timestamp, plus `IsDeductionApplicable` for
+employer-borne obligations where nothing is withheld. **`IsPaid` is not a flag.** It is derived:
+an obligation is paid when the sum of its unreversed `StatutoryPayment` rows covers the amount due.
+The displayed `StatutoryObligationStatus` is computed from the four, plus the due date.
+**Consequences:** There is no code path that can mark an obligation paid without a payment carrying
+a date, method, amount, currency and reference. Approving a payroll run sets nothing beyond
+approval. A reversal retains the payment row with its reason, so the balance restores without the
+history disappearing. Employer-borne obligations show `n/a` for deduction rather than a misleading
+"no".
+
+### ADR-028 — The payslip renders; it never recalculates
+**Status:** Accepted (Milestone 4)
+**Context:** ADR-026 established that the UI does not calculate. The payslip is where that rule is
+most tempting to break, because a payslip is the one document an employee actually checks, and a
+"quick total" in the view is easy to write.
+**Decision:** `PayslipBuilder` assembles a `PayslipDocument` from persisted `PayrollRunEmployee`
+rows, their earning, deduction and employer-cost lines, and their `UnresolvedItem` rows. It
+performs no payroll arithmetic. Each figure is a `PayslipAmount` in one of three states —
+`Calculated`, `Zero` or `Unresolved` — and `Unresolved` renders as `—`, never as `0.00`.
+Configured statutory categories appear even when zero, so their absence is visible.
+**Consequences:** A payslip cannot disagree with the run it came from; the reconciliation test
+compares payslip totals against the stored totals directly. A development-mode payslip is
+watermarked and `CanBeIssued` is false. Re-issuing after a correction creates a new revision and
+supersedes the old one rather than overwriting it.
+
+### ADR-029 — Every report groups by currency before it sums anything
+**Status:** Accepted (Milestone 4)
+**Context:** A payroll paying some staff in USD and some in ZiG has no meaningful combined total.
+A single "total payroll" figure that added the two would be wrong in a way that looks authoritative.
+**Decision:** Every report method in `PayrollReportService` begins `GroupBy(e => e.CurrencyCode)`
+and returns `CurrencySection<T>` — a currency, its rows and its own totals. There is no field
+anywhere in `PayrollReports.cs` that holds a cross-currency total. The currency summary report
+places the currencies side by side and deliberately has no combined row.
+**Consequences:** A consolidated figure can only ever be produced deliberately, and when it is, it
+must state the rate, its date and both original totals. `Reports_never_sum_across_currencies`
+asserts this structurally rather than by inspecting one report.
+
+### ADR-030 — A locked run's result rows are locked with it
+**Status:** Accepted (Milestone 4)
+**Context:** `PeriodLockInterceptor` guarded `ILockable` entities, which is the run and the period.
+The figures, though, live in `PayrollRunEmployee` and its lines, and those carry no status of their
+own — so a locked run's header was frozen while the numbers it was supposed to freeze could still
+be edited by any code that had a `DbContext`. The Milestone 4 acceptance criterion says a locked
+run is immutable *at the data layer*, and it was not.
+**Decision:** Result rows are marked `IPayrollResultRow`. On save, the interceptor resolves the
+owning run for any changed `PayrollRunEmployee` or result row and refuses the write when that run
+is `Locked`. Statutory obligations and payments are deliberately **not** marked: paying an
+authority is a later event and must keep working after the run is locked.
+**Consequences:** Tampering with a locked payroll throws `PeriodLockedException` whichever row is
+touched. An unlocked run stays editable, which is what the Review stage is for. The guard reads the
+change tracker, so bulk `ExecuteUpdate`/`ExecuteDelete` operations would bypass it; none exist
+against payroll data, and any future one must check the lock itself.

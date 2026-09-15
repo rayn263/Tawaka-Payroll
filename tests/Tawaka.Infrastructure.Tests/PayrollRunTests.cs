@@ -53,7 +53,9 @@ public class PayrollRunTests : EmployeeTestBase
         var source = new EfStatutoryRuleSource(db.Context);
         var resolver = new StatutoryRuleResolver(source);
         var builder = new PayrollSnapshotBuilder(db.Context, resolver);
-        var service = new PayrollRunService(db.Context, builder, db.User, db.Clock);
+        var obligations = new Tawaka.Application.Statutory.Obligations.StatutoryObligationService(
+            db.Context, db.User, db.Clock);
+        var service = new PayrollRunService(db.Context, builder, obligations, db.User, db.Clock);
 
         return new PayrollFixture(db, companyId, employee, period, service, builder, permanentTypeId);
     }

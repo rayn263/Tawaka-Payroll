@@ -54,9 +54,10 @@ rule rows and set their `VerificationStatus`.
 
 ---
 
-## New blocking questions discovered during compliance research (Q21–Q28)
+## New blocking questions discovered during compliance research (Q21–Q30)
 
 Full detail and reasoning in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25.2.
+Q29 and Q30 were found during the Milestone 4 access recheck (§0.1a and §1.4a).
 
 | # | Question | Impact | Status |
 |---|---|---|---|
@@ -68,3 +69,20 @@ Full detail and reasoning in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25.2.
 | **Q26** | **PAYE fixed-deduction ("less") column values** for every band, both currencies, every period basis | **CRITICAL** | OPEN |
 | **Q27** | Employer loan benefit benchmark — SOFR or LIBOR? | LOW | OPEN |
 | **Q28** | Does the bonus exemption apply to any bonus, or only an annual/13th-cheque bonus? | MEDIUM | OPEN |
+| **Q29** | Does ZIMRA publish a **ZWG monthly** PAYE table, or is monthly ZiG remuneration taxed on the annual table? | HIGH | OPEN |
+| **Q30** | Are the 2026 PAYE tables actually the 2025 tables carried forward, with no separate 2026 publication? | MEDIUM | OPEN |
+
+---
+
+## Still explicitly tracked as at Milestone 4 (2026-09-15)
+
+As instructed, these remain open and are restated here so they cannot drift out of sight:
+
+- **Q1** — dual-currency PAYE methodology. Advanced, not resolved.
+- **Q6** — APWCS assessed rate and industry classification. Externally dependent: only NSSA can
+  give it, via Form WC50.
+- **Q22** — how the monthly NSSA ceiling applies to weekly and fortnightly payroll.
+- **Q26** — the PAYE fixed-deduction ("less") column. Critical; blocks all PAYE verification.
+
+None of the four moved during Milestone 4, and none was worked around in code. Each is represented
+in the engine by a named `UnresolvedItem` rather than by a substituted figure.

@@ -3,10 +3,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Tawaka.Application.Employees;
 using Tawaka.Application.Payroll;
 using Tawaka.Application.Security;
+using Tawaka.Application.Statutory.Obligations;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Employees;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Statutory;
+using Tawaka.Domain.Statutory.Obligations;
 using Tawaka.Infrastructure.Persistence;
 
 namespace Tawaka.Foundation.Cli;
@@ -44,6 +46,11 @@ public static class PayrollDemo
 
         if (verifyRules)
         {
+            Console.WriteLine();
+            Console.WriteLine("*** --verify-rules: every seeded rule is being marked Verified for");
+            Console.WriteLine("*** demonstration only, and this period runs in LIVE mode. No rule has");
+            Console.WriteLine("*** actually been verified against an authoritative source. Never use");
+            Console.WriteLine("*** this switch against a real database.");
             await VerifyRulesAsync(db);
         }
 
@@ -65,7 +72,13 @@ public static class PayrollDemo
                 EndDate = new DateOnly(2026, 9, 30),
                 PayDate = new DateOnly(2026, 9, 30),
                 TaxYear = 2026,
-                Mode = PayrollMode.Development
+
+                // --verify-rules is the demonstration switch: it pretends every seeded rule has
+                // been verified against an authoritative source so the workflow after approval can
+                // be exercised. The real gate is unchanged — without the switch this period stays
+                // in Development and the run cannot be approved, which is what a real install sees
+                // until a rule is verified against evidence.
+                Mode = verifyRules ? PayrollMode.Live : PayrollMode.Development
             };
             db.PayrollPeriods.Add(period);
             await db.SaveChangesAsync();
@@ -79,7 +92,155 @@ public static class PayrollDemo
 
         // The manager approves, not the officer who calculated it.
         await SignInAsync(auth, session, "rmoyo", ManagerPassword);
-        await PrintApprovalAttemptAsync(runs, run.Id);
+        var approved = await PrintApprovalAttemptAsync(runs, run.Id);
+
+        // Finalising, and settling the authorities afterwards, is the officer's work again.
+        await SignInAsync(auth, session, "tncube", OfficerPassword);
+        await PrintObligationLifecycleAsync(scope.ServiceProvider, db, runs, company.Id, run.Id, approved);
+    }
+
+    /// <summary>
+    /// Walks the statutory obligation lifecycle: finalising the run creates the obligations with
+    /// Calculated and Deducted set, approval authorises payment, and only a recorded payment with a
+    /// reference makes anything paid. Each step prints the register so the four states can be seen
+    /// moving independently.
+    /// </summary>
+    private static async Task PrintObligationLifecycleAsync(
+        IServiceProvider services, PayrollDbContext db, PayrollRunService runs,
+        Guid companyId, Guid runId, bool approved)
+    {
+        var obligations = services.GetRequiredService<StatutoryObligationService>();
+
+        Console.WriteLine();
+        Console.WriteLine("STATUTORY OBLIGATIONS");
+        Console.WriteLine(new string('-', 112));
+
+        if (!approved)
+        {
+            Console.WriteLine("  The run was not approved, so there is nothing to finalise and no");
+            Console.WriteLine("  obligation exists. Nothing is recorded as owed, and nothing is");
+            Console.WriteLine("  recorded as paid.");
+            Console.WriteLine();
+            Console.WriteLine("  This is the live payroll gate working: a development calculation");
+            Console.WriteLine("  cannot be approved, so it can never produce a statutory liability");
+            Console.WriteLine("  that looks settled. Pass --verify-rules to simulate verified rules");
+            Console.WriteLine("  and walk the rest of the lifecycle.");
+            return;
+        }
+
+        var finalise = await runs.FinaliseAsync(runId);
+        if (!finalise.IsValid)
+        {
+            foreach (var error in finalise.Errors)
+            {
+                Console.WriteLine($"  Finalisation refused: {error.Message}");
+            }
+
+            return;
+        }
+
+        Console.WriteLine("  Run finalised. Obligations created with Calculated and Deducted set.");
+        db.ChangeTracker.Clear();
+        await PrintRegisterAsync(obligations, companyId);
+
+        var paye = (await obligations.GetRegisterAsync(companyId))
+            .FirstOrDefault(o => o.ObligationType == StatutoryObligationType.Paye &&
+                                 o.CurrencyCode == "USD");
+        if (paye is null)
+        {
+            return;
+        }
+
+        var approval = await obligations.ApproveAsync(paye.Id);
+        Console.WriteLine();
+        Console.WriteLine(approval.IsValid
+            ? "  USD PAYE approved for payment. Note it is still NOT paid."
+            : $"  Approval refused: {string.Join("; ", approval.Errors.Select(e => e.Message))}");
+
+        db.ChangeTracker.Clear();
+        await PrintRegisterAsync(obligations, companyId);
+
+        // A deliberately partial payment, to show that the outstanding balance is tracked rather
+        // than the obligation flipping straight to paid.
+        var part = Math.Round(paye.CalculatedAmount / 2m, 2);
+        var payment = await obligations.RecordPaymentAsync(new RecordPaymentRequest
+        {
+            ObligationId = paye.Id,
+            Amount = part,
+            CurrencyCode = "USD",
+            PaymentDate = new DateOnly(2026, 10, 8),
+            PaymentReference = "FBC-RTGS-90114",
+            PaymentMethod = StatutoryPaymentMethod.BankTransfer,
+            AuthorityReceiptNumber = "ZIMRA-REC-55231"
+        });
+
+        Console.WriteLine();
+        Console.WriteLine(payment.Succeeded
+            ? $"  Part payment of USD {part:N2} recorded against USD PAYE (ref FBC-RTGS-90114)."
+            : $"  Payment refused: {string.Join("; ", payment.Validation!.Errors.Select(e => e.Message))}");
+
+        // The same payment without a reference, to show it is refused rather than accepted quietly.
+        var unreferenced = await obligations.RecordPaymentAsync(new RecordPaymentRequest
+        {
+            ObligationId = paye.Id,
+            Amount = 10m,
+            CurrencyCode = "USD",
+            PaymentDate = new DateOnly(2026, 10, 8),
+            PaymentReference = string.Empty
+        });
+
+        if (!unreferenced.Succeeded)
+        {
+            foreach (var error in unreferenced.Validation!.Errors)
+            {
+                Console.WriteLine($"  Payment without a reference refused: {error.Message}");
+            }
+        }
+
+        db.ChangeTracker.Clear();
+        await PrintRegisterAsync(obligations, companyId);
+
+        Console.WriteLine();
+        Console.WriteLine("  The remaining balance is still outstanding. No step above marked an");
+        Console.WriteLine("  obligation paid because payroll was approved: only a recorded payment");
+        Console.WriteLine("  with a reference moves money to an authority.");
+    }
+
+    private static async Task PrintRegisterAsync(
+        StatutoryObligationService obligations, Guid companyId)
+    {
+        var register = await obligations.GetRegisterAsync(companyId);
+        var today = new DateOnly(2026, 10, 8);
+
+        Console.WriteLine();
+        foreach (var group in register.GroupBy(o => o.CurrencyCode).OrderBy(g => g.Key))
+        {
+            var label = group.Key == "ZWG" ? "ZiG" : group.Key;
+            Console.WriteLine($"  {label} obligations");
+            Console.WriteLine($"  {"OBLIGATION",-28}{"CALC",12}{"DEDUCTED",10}{"APPROVED",10}" +
+                              $"{"PAID",12}{"OUTSTANDING",14}  STATUS");
+
+            foreach (var obligation in group.OrderBy(o => o.ObligationType))
+            {
+                var deducted = !obligation.IsDeductionApplicable
+                    ? "n/a"
+                    : obligation.IsDeducted ? "yes" : "no";
+
+                Console.WriteLine(
+                    $"  {obligation.ObligationType,-28}{obligation.CalculatedAmount,12:N2}" +
+                    $"{deducted,10}{(obligation.IsApproved ? "yes" : "no"),10}" +
+                    $"{obligation.PaidAmount.Amount,12:N2}{obligation.Outstanding.Amount,14:N2}" +
+                    $"  {obligation.StatusOn(today)}");
+            }
+
+            // Per currency, and only per currency: a USD liability and a ZiG liability are never
+            // added together.
+            Console.WriteLine(
+                $"  {"TOTAL " + label,-28}{group.Sum(o => o.CalculatedAmount),12:N2}" +
+                $"{string.Empty,10}{string.Empty,10}{group.Sum(o => o.PaidAmount.Amount),12:N2}" +
+                $"{group.Sum(o => o.Outstanding.Amount),14:N2}");
+            Console.WriteLine();
+        }
     }
 
     private static async Task EnsureUserAsync(
@@ -363,7 +524,7 @@ public static class PayrollDemo
         }
     }
 
-    private static async Task PrintApprovalAttemptAsync(PayrollRunService runs, Guid runId)
+    private static async Task<bool> PrintApprovalAttemptAsync(PayrollRunService runs, Guid runId)
     {
         var approval = await runs.ApproveAsync(runId);
         Console.WriteLine("APPROVAL ATTEMPT");
@@ -379,6 +540,8 @@ public static class PayrollDemo
                 Console.WriteLine($"  Refused: {error.Message}");
             }
         }
+
+        return approval.IsValid;
     }
 
     private static string Show(decimal? amount) =>

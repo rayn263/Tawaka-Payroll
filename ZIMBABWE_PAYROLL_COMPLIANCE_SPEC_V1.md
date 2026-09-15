@@ -1,7 +1,7 @@
 # ZIMBABWE PAYROLL COMPLIANCE SPECIFICATION v1.0
 
 **Status:** DRAFT — awaiting approval. Not yet authoritative.
-**Research date:** 12 September 2026 · **Revised:** 13 September 2026 (Milestone 3 research round)
+**Research date:** 12 September 2026 · **Revised:** 15 September 2026 (Milestone 4 recheck)
 **Scope:** Statutory basis for the Tawaka Payroll calculation engine.
 **Supersedes:** the compliance section of `docs/COMPLIANCE_ZIMBABWE.md` (that document remains as
 the architectural risk register; this document governs calculation).
@@ -38,6 +38,27 @@ indexed pages, including from ZIMRA's own site. That channel is genuinely useful
 findings below are quoted from ZIMRA and NSSA pages and from the Labour Act — but it is
 **transmission through a third party of text I could not verify against the live document**. A
 snippet can be stale, truncated, or drawn from a superseded page.
+
+### 0.1a Access recheck — 15 September 2026 (Milestone 4)
+
+You asked that the ZWG PAYE table catalogue be rechecked before any ZiG table is reported as
+unavailable. It was rechecked on **15 September 2026**. The result is unchanged:
+
+| Host | Result on 15 Sep 2026 |
+|---|---|
+| `www.zimra.co.zw` (site root and the PAYE tax tables page) | `403` at CONNECT — egress policy denial |
+| `www.nssa.org.zw` | `403` at CONNECT |
+| `www.veritaszim.net` | `403` at CONNECT |
+
+The proxy's own status endpoint records these as `connect_rejected — gateway answered 403 to
+CONNECT (policy denial or upstream failure)`. The request does not reach ZIMRA. **No rule is
+upgraded, and no ZiG table value in this document was obtained from a primary source.**
+
+What the search channel did add this round is catalogue information rather than values — recorded
+in §1.4a, because "which tables exist" and "what is in them" are different questions and only the
+first moved.
+
+---
 
 ### 0.2 Consequence for the confidence system
 
@@ -152,6 +173,38 @@ adopted.
 
 **Rule ID `PAYE-ZWG-2026`. Grade: 🔴 overall** (deduction column unknown; band corroboration
 weaker than USD).
+
+### 1.4a ZWG table catalogue — what the recheck found (15 September 2026)
+
+Two findings, both about the **catalogue** of tables rather than their contents. Neither upgrades
+any rule; both change what the system should say when a ZiG table cannot be resolved.
+
+**Finding 1 — ZIMRA publishes ZWG tables by pay frequency, but one indexed listing omits a ZWG
+*monthly* table.** The listings seen advertise ZWG tables for daily, weekly, fortnightly and
+annual periods, and at least one does not show a monthly ZWG table alongside them. Three readings
+are possible and the snippets cannot distinguish them:
+
+1. A monthly ZWG table exists and the listing seen was partial or stale.
+2. Monthly ZWG remuneration is meant to be taxed via the annual table (a cumulative/FDS approach).
+3. The listing reflects an actual gap at the time it was indexed.
+
+This is now **Q29**. It matters because the engine resolves a table by (currency, period basis)
+and refuses to substitute — so if no ZWG monthly table exists, ZiG monthly payroll has no table to
+resolve, and that is a statutory question, not a configuration mistake. Until Q29 is answered the
+system must report a missing ZWG monthly table as **unresolved**, and must **not** derive one by
+dividing the annual bands by twelve: §1.4 already records that ZiG bands are set independently, and
+the same reasoning forbids deriving a period table from another period's table.
+
+**Finding 2 — as of January 2026, reporting indicated ZIMRA had not released new 2026 tables and
+the 2025 tables still applied.** If correct, the 2026 figures are the 2025 figures carried forward
+rather than a 2026 publication. This is **Q30**. It does not make the numbers more trustworthy: it
+changes *which document* has to be read to verify them, and it means a rule dated 2026-01-01 may in
+fact be sourced from a 2025 publication. The rule's `SourceReference` must say so once the document
+is read; the engine's dated-rule model already handles a rule whose effective date and publication
+date differ.
+
+Both findings come from the search-snippet channel, which §0 grades as 🟡 at best. They are
+recorded because they are decision-relevant, not because they are verified.
 
 ### 1.5 2026 changes
 
@@ -998,10 +1051,13 @@ overtime and bonuses excluded. AIDS Levy 3% of tax after credits.
 | **Q26** | **PAYE fixed-deduction ("less") column values** for every band, both currencies, every period basis | **CRITICAL** | Tables cannot be applied without it; blocks all PAYE |
 | **Q27** | Employer **loan benefit** benchmark: SOFR or LIBOR? | LOW | LIBOR is being retired; sources cite both |
 | **Q28** | Does the **bonus exemption** apply to any bonus, or only an annual/13th-cheque bonus? | MEDIUM | Determines whether performance and project bonuses qualify |
+| **Q29** | Does ZIMRA publish a **ZWG monthly** PAYE table, or is monthly ZiG remuneration taxed on the annual table? | **HIGH** | Milestone 4 recheck: an indexed ZIMRA listing shows ZWG daily, weekly, fortnightly and annual tables but no monthly one. Blocks monthly ZiG payroll (§1.4a) |
+| **Q30** | Are the **2026 tables actually the 2025 tables** carried forward, with no 2026 publication? | MEDIUM | Reporting from January 2026 indicates no new 2026 tables had been released. Changes which document must be read to verify, and what the rule's source reference should cite (§1.4a) |
 
 ### 25.3 Blocking summary
 
 **Cannot enable live payroll until resolved:** Q26 (critical), Q1, Q3-values, Q6, Q21, Q22.
+**Cannot enable monthly ZiG payroll until resolved:** Q29.
 **Cannot enable for affected employees only:** Q4a, Q5 (project/part-time/intern), Q23, Q24, Q28.
 **Phase 3 only:** Q25, Q27.
 

@@ -25,9 +25,6 @@ public class ComplianceTestCatalogue
     private const string NeedsEmployees =
         "Pending: needs the loans and advances module (Milestone 5).";
 
-    private const string NeedsObligations =
-        "Pending Milestone 4 (statutory obligation register).";
-
     private static readonly DateOnly PayDate = new(2026, 9, 30);
 
     // ---- Implemented now -------------------------------------------------------------------
@@ -127,6 +124,9 @@ public class ComplianceTestCatalogue
     //   PayrollRunTests (infra)      TC-25 TC-27 TC-30, historical contract and tax-rule
     //                                reproducibility, and the approval gates
     //   PeriodLockTests (infra)      TC-30
+    //   StatutoryObligationTests     TC-28 TC-29 TC-29b, and the full obligation state machine
+    //   PayslipTests / ReportTests   payslip reconciliation, zero vs unresolved, currency
+    //                                separation in every report
 
     // ---- Still pending -----------------------------------------------------------------------
 
@@ -142,10 +142,6 @@ public class ComplianceTestCatalogue
 
     [Fact(Skip = NeedsEmployees)]
     public void TC_33_Casual_six_week_threshold_warns_without_reclassifying() { }
-
-    [Fact(Skip = NeedsObligations)] public void TC_28_Statutory_payment_outstanding() { }
-    [Fact(Skip = NeedsObligations)] public void TC_29_Statutory_payment_completed() { }
-    [Fact(Skip = NeedsObligations)] public void TC_29b_Partial_statutory_payment() { }
 
     // TC-30 (locked payroll modification) is implemented in Tawaka.Infrastructure.Tests, where the
     // lock interceptor it exercises actually lives.

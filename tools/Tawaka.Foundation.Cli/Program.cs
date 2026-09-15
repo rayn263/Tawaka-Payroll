@@ -11,7 +11,11 @@ using Tawaka.Infrastructure.Seeding;
 // it creates the database from the real migrations, seeds the statutory baseline, prints the rule
 // register with verification status, and runs the live payroll gate.
 
-var databasePath = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal))
+// An empty argument is not a path. The shell wrappers pass "${1:-}", so a run with no argument
+// arrives here as one empty string, which would otherwise become "Data Source=".
+var databasePath = args
+                       .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a) &&
+                                            !a.StartsWith("--", StringComparison.Ordinal))
                    ?? Path.Combine(Path.GetTempPath(), "tawaka-foundation.db");
 
 if (File.Exists(databasePath))

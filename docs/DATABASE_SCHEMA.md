@@ -1,7 +1,7 @@
 # Tawaka Payroll — Database Schema
 
 **Document status:** Proposal, awaiting approval
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-15
 
 Conventions:
 
@@ -142,9 +142,33 @@ The heart of the "never claim something was paid when it wasn't" requirement.
 | **StatutoryPayments** | `Id`, `StatutoryObligationId`, `Amount/Currency`, `PaymentDate`, `PaymentMethod`, `CompanyBankAccountId`, `PaymentReference`, `AuthorityReceiptNumber`, `ReceiptFilePath`, `ReceiptFileHash`, `RecordedBy/At`, `Notes`, `IsReversed`, `ReversalReason`. **Only the existence of a row here can set `IsPaid`.** Partial payments are supported; the obligation stays `PartiallyPaid` until fully settled. |
 | **StatutoryReturns** | `Id`, `CompanyId`, `ReturnType` (`P2`/`P4`/`ITF16`/`ITF12B`/`Other`), `PeriodId`, `Currency`, `SubmittedBy/At`, `SubmissionReference`, `FilePath`, `Status` |
 
-**State machine:** the four booleans are set by four distinct, separately permissioned actions.
-Nothing in the application can set `IsPaid = true` without a corresponding `StatutoryPayments`
-row carrying a date, method and reference.
+**State machine:** the four states are set by four distinct, separately permissioned actions.
+Nothing in the application can set paid without a corresponding `StatutoryPayments` row carrying a
+date, method and reference.
+
+**As built at Milestone 4** (migration `StatutoryObligationsAndPayslips`), with three refinements
+to the design above — all in the direction of the same principle:
+
+- **`IsPaid` is not a column.** It is derived from the sum of unreversed payments (ADR-027), so
+  there is no field for any code path to set. `PaidAmount` and `OutstandingAmount` are likewise
+  computed from the payment rows rather than stored and maintained.
+- **`IsDeductionApplicable`** was added. Employer-borne obligations — NSSA employer, APWCS, ZIMDEF,
+  SDF — withhold nothing from anybody, so "deducted: no" would be a false negative on the register.
+  They report `n/a` instead.
+- **`StatutoryPayments` carries `PenaltyOrInterestIncluded`, `IsReversed`, `ReversalReason`,
+  `ReversedBy` and `ReversedAt`.** A reversal keeps the row and its reason; the balance restores
+  without the history disappearing. `PrincipalAmount` is the amount less penalty or interest, so a
+  penalty is never mistaken for a settlement of the liability itself.
+
+`StatutoryReturns` is **not** created yet: the return formats could not be obtained from an
+authoritative source, and the table would only invite a guess at their contents.
+
+**Payslips** (also Milestone 4): `Id`, `PayrollRunEmployeeId`, `PayslipNumber`, `Revision`,
+`GeneratedBy/At`, `IssuedBy/At`, `IsDevelopmentCopy`, `SupersededByPayslipId`, `SupersedeReason`,
+`FilePath`, `ContentHash`, `TemplateVersion`. The company is reached through the run employee, so
+it is not duplicated here. The row records that a payslip was issued and which result it rendered; the document
+itself is rebuilt from the payroll result each time it is opened, so a payslip can never drift from
+the run it came from.
 
 ---
 

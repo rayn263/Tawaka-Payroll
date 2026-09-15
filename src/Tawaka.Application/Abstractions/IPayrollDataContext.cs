@@ -8,6 +8,7 @@ using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Statutory;
+using Tawaka.Domain.Statutory.Obligations;
 
 namespace Tawaka.Application.Abstractions;
 
@@ -68,6 +69,10 @@ public interface IPayrollDataContext
     DbSet<PayrollCalculationTraceEntry> PayrollCalculationTraces { get; }
     DbSet<PayrollUnresolvedItem> PayrollUnresolvedItems { get; }
     DbSet<PayrollCostAllocation> PayrollCostAllocations { get; }
+    DbSet<StatutoryObligation> StatutoryObligations { get; }
+    DbSet<StatutoryObligationLine> StatutoryObligationLines { get; }
+    DbSet<StatutoryPayment> StatutoryPayments { get; }
+    DbSet<Payslip> Payslips { get; }
     DbSet<AppSetting> AppSettings { get; }
     DbSet<AuditLog> AuditLogs { get; }
 

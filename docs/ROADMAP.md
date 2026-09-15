@@ -1,7 +1,22 @@
 # Tawaka Payroll — Development Roadmap
 
 **Document status:** Proposal, awaiting approval
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-15
+
+## Where we are (end of Milestone 4)
+
+Phase 0 is complete. In Phase 1, delivered: 1.1–1.13 in full, and 1.14 except file export — the
+reports render and print but do not yet write PDF, Excel or CSV. From Phase 2, 2.1 (statutory
+approval and payment recording, including partial payments and reversal) is delivered early,
+because it is inseparable from 1.13: an obligation register that cannot record a payment would
+have no way to stop claiming money is owed after it has been paid.
+
+Not yet built: 1.15 dashboard warning cards beyond the counters already shown, 1.16 backup and
+restore, and the rest of Phase 2 — timesheets, leave, loans, the audit log screen and the reopen
+diff report.
+
+**Live payroll remains gated throughout.** Every milestone above calculates in development mode
+only until the verification checklist in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 is cleared.
 
 Each milestone ends with something you can actually run and inspect. Nothing is "done" until it
 is testable by you, not merely compiled.

@@ -1,7 +1,6 @@
 @namespace Tawaka.Ui.Shared.Components.Pages
 @page "/time"
 @page "/loans"
-@page "/reports"
 @inject NavigationManager Nav
 
 @* Rather than a screen that looks finished but does nothing, each module that has not been built
@@ -53,22 +52,10 @@
         },
         null);
 
-    private static readonly ModuleInfo Reports = new(
-        "Reports", "Milestone 4",
-        new[]
-        {
-            "Payroll summary, register, employee earnings and deductions, net pay, employer cost",
-            "Tax reports: PAYE, AIDS Levy and taxable income, separately per currency",
-            "NSSA and APWCS reports",
-            "Labour cost by project, department and employee type",
-            "Export to PDF, Excel and CSV"
-        },
-        "Reports read payroll results, so they follow the calculation engine.");
 
     private ModuleInfo Module => new Uri(Nav.Uri).AbsolutePath.Trim('/').ToLowerInvariant() switch
     {
         "loans" => Loans,
-        "reports" => Reports,
         _ => Time
     };
 }

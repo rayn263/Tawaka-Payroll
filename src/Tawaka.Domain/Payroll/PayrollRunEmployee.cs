@@ -75,7 +75,7 @@ public class PayrollRunEmployee : AuditableEntity
     public Money? TotalEmployerCost => AsMoney(TotalEmployerCostAmount);
 }
 
-public class PayrollEarningLine : Entity
+public class PayrollEarningLine : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public string Code { get; set; } = string.Empty;
@@ -100,7 +100,7 @@ public class PayrollEarningLine : Entity
     public Money AsMoney() => new(Amount, new CurrencyCode(CurrencyCode));
 }
 
-public class PayrollDeductionLine : Entity
+public class PayrollDeductionLine : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public string Code { get; set; } = string.Empty;
@@ -114,7 +114,7 @@ public class PayrollDeductionLine : Entity
     public Money AsMoney() => new(Amount, new CurrencyCode(CurrencyCode));
 }
 
-public class PayrollEmployerCostLine : Entity
+public class PayrollEmployerCostLine : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public string Code { get; set; } = string.Empty;
@@ -133,7 +133,7 @@ public class PayrollEmployerCostLine : Entity
 /// One step of the derivation of one figure. Written once when the run is calculated and never
 /// updated: the trace of a finalised payroll is immutable.
 /// </summary>
-public class PayrollCalculationTraceEntry : Entity
+public class PayrollCalculationTraceEntry : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public int Sequence { get; set; }
@@ -155,7 +155,7 @@ public class PayrollCalculationTraceEntry : Entity
 }
 
 /// <summary>A figure that could not be produced, with the rule and question behind it.</summary>
-public class PayrollUnresolvedItem : Entity
+public class PayrollUnresolvedItem : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public string Code { get; set; } = string.Empty;
@@ -169,7 +169,7 @@ public class PayrollUnresolvedItem : Entity
 }
 
 /// <summary>How this employee's cost is attributed to projects and departments.</summary>
-public class PayrollCostAllocation : Entity
+public class PayrollCostAllocation : Entity, IPayrollResultRow
 {
     public Guid PayrollRunEmployeeId { get; set; }
     public Guid? ProjectId { get; set; }

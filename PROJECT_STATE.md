@@ -1,8 +1,8 @@
 # Project State
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-15
 **Current phase:** Phase 1 — core payroll
-**Current milestone:** Milestone 3 — Payroll periods and calculation engine — **COMPLETE, awaiting approval**
+**Current milestone:** Milestone 4 — Payslips, statutory obligations and reports — **COMPLETE, awaiting approval**
 **Payroll mode:** DEVELOPMENT (live payroll is gated and currently blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
@@ -23,11 +23,17 @@ One or more statutory rules required for this payroll have not been verified.
 | Verified (usable in live payroll) | **0** |
 | Supported (blocked from live payroll) | 10 |
 | Unverified (blocked from live payroll) | 14 |
-| Blocking questions open | 14 (Q1, Q3-values, Q4a, Q5-partial, Q6, Q21–Q28) |
+| Blocking questions open | 16 (Q1, Q3-values, Q4a, Q5-partial, Q6, Q21–Q30) |
 
 No rule is Verified because no primary source could be opened from the build environment; see
 `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §0. The path to clearing the gate is §26 of that
 document — ten documents, roughly one working day.
+
+Access was **rechecked on 15 September 2026** as instructed, specifically for the ZWG PAYE table
+catalogue. ZIMRA, NSSA and Veritas still return `403` at the CONNECT stage from the egress proxy.
+Nothing was upgraded. The recheck did produce two catalogue findings, now **Q29** (is there a ZWG
+*monthly* table at all?) and **Q30** (are the 2026 tables the 2025 tables carried forward?) —
+§0.1a and §1.4a of the compliance specification.
 
 ## 2. Architecture as built
 
@@ -39,9 +45,9 @@ Clean architecture, dependencies inward only. Eleven projects:
 | `src/Tawaka.Payroll.Engine` | **The calculation engine**: pipeline, PAYE table and NSSA calculators, rounding policy, input snapshot, immutable result, tracing | yes |
 | `src/Tawaka.Application` | Abstractions, rule resolution, live payroll gate, validation, authentication, employee and contract services, payroll snapshot builder and run service | yes |
 | `src/Tawaka.Infrastructure` | EF Core context, configurations, migrations, interceptors, seeding, DI | yes |
-| `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — layout, login, dashboard, employees, profile, projects, statutory, settings | yes |
+| `src/Tawaka.Ui.Shared` | **All Razor screens** (ADR-019) — layout, login, dashboard, employees, profile, projects, payroll runs and preview, **payslip, statutory obligations, reports**, statutory rules, settings | yes |
 | `src/Tawaka.Ui.Desktop` | WPF host only: window, `BlazorWebView`, startup wiring (`net8.0-windows`) | **no — Windows only** |
-| `tools/Tawaka.Foundation.Cli` | Cross-platform check: migrate, seed, rule register, live gate, and `--payroll` to run a real calculation and print the preview and an explanation | yes |
+| `tools/Tawaka.Foundation.Cli` | Cross-platform check: migrate, seed, rule register, live gate, and `--payroll` to run a real calculation, print the preview and an explanation, and walk the obligation lifecycle from finalisation to a part payment | yes |
 | `tests/Tawaka.Domain.Tests` | Money, currency, date range, conversion provenance | yes |
 | `tests/Tawaka.Application.Tests` | Password hashing and policy, employee/contract/payment validation | yes |
 | `tests/Tawaka.Payroll.Engine.Tests` | Rule resolution, live gate, tracing, the 34-case compliance catalogue | yes |
@@ -55,8 +61,8 @@ and `Tawaka.Payroll.sln` (adds the Windows desktop host).
 | | |
 |---|---|
 | Provider | SQLite |
-| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913_PayrollRunsAndResults` |
-| Tables | 52 |
+| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913084801_PayrollRunsAndResults`, `20260915113432_StatutoryObligationsAndPayslips` |
+| Tables | 56 |
 
 Milestone 1 (16): `AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
 `CurrencyTaxStrategyRules`, `EmployerLevyRules`, `ExchangeRates`, `NssaEligibilityRules`,
@@ -74,6 +80,9 @@ Milestone 3 (8): `PayrollRuns`, `PayrollRunEmployees`, `PayrollEarningLines`,
 `PayrollDeductionLines`, `PayrollEmployerCostLines`, `PayrollCalculationTraces`,
 `PayrollUnresolvedItems`, `PayrollCostAllocations`.
 
+Milestone 4 (4): `Payslips`, `StatutoryObligations`, `StatutoryObligationLines`,
+`StatutoryPayments`.
+
 **Company-ready:** every company-scoped table carries `CompanyId`, and `StatutoryRule` carries a
 nullable `CompanyId` so employer-specific rules (APWCS, NEC) can coexist with national ones. The
 first release operates with exactly one company and no multi-company user interface.
@@ -85,7 +94,8 @@ break ordering and summation.
 
 ## 4. Rules implemented
 
-Rule *infrastructure* is complete; no statutory *calculation* exists yet, by design.
+Rule infrastructure and the calculation engine are complete. No rule is Verified, so every one of
+these calculates in development mode only.
 
 | Rule | Rule ID | Status | Note |
 |---|---|---|---|
@@ -107,16 +117,15 @@ Rule *infrastructure* is complete; no statutory *calculation* exists yet, by des
 |---|---|---|
 | Domain | 29 | 0 |
 | Application | 43 | 0 |
-| Payroll.Engine | 230 | 6 |
-| Infrastructure | 106 | 0 |
-| **Total** | **408** | **6** |
+| Payroll.Engine | 230 | 3 |
+| Infrastructure | 227 | 0 |
+| **Total** | **529** | **3** |
 
-The skipped count fell from 31 to 6: Milestone 3 activated most of the compliance catalogue against
-the real engine. The six that remain need the loans module, the casual-engagement warning or the
-statutory obligation register.
+Milestone 4 added 121 tests: the statutory obligation state machine, payslip rendering and
+reconciliation, the per-currency reports, the workflow transitions and the reproducibility cases.
 
-The 31 skipped are compliance cases that need later milestones; they are present and counted
-rather than omitted. See `TESTING.md`.
+The skipped count fell from 6 to 3. The three that remain need the loans module (advance recovery),
+the casual-engagement warning and part-time ceiling treatment, which depends on Q22.
 
 ## 5a. What the engine does
 
@@ -134,7 +143,7 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
 1. **The Razor screens compile but have not been run.** All UI code now builds and is
    type-checked on every build (ADR-019), which is a real improvement on Milestone 1, but no
    screen has been rendered or clicked. Behaviour — data binding, navigation, form round-trips —
-   is unverified until it runs on Windows. Component tests are proposed for Milestone 3.
+   is unverified until it runs on Windows. Component tests are proposed for Milestone 5.
 2. **The WPF host is still Windows-only and uncompiled here**, as is
    `Microsoft.AspNetCore.Components.WebView.Wpf` 8.0.100. The host is now thin — a window, a
    WebView and startup wiring — so the surface that could break is small, but confirm the package
@@ -147,9 +156,13 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
 5. **Recurring earnings and deductions have no editing screen yet.** They are modelled, persisted,
    validated and shown on the employee profile, but are captured programmatically until the
    payroll engine gives them a purpose (Milestone 3).
-6. **The lock interceptor keys on a `Status` property** named `Locked`. When payroll transaction
-   entities arrive they must be scoped to their period explicitly; that generalisation is
-   Milestone 4 work and is noted in the interceptor.
+6. **The lock interceptor now reaches payroll result rows** as well as `ILockable` entities: a
+   locked run's per-employee results, lines, traces, unresolved items and cost allocations are
+   refused at the data layer (ADR-030). Statutory obligations and payments are deliberately
+   outside that guard, because settling an authority happens after the run is locked. Bulk
+   operations that bypass the change tracker (`ExecuteDelete`, `ExecuteUpdate`) are not
+   intercepted by EF Core and so are not covered; nothing in the codebase uses them against
+   payroll data.
 7. **`NationalId` format checking is opt-in and currently off.** District codes and check letters
    vary, and rejecting a genuine identity number is worse than accepting an unusual one.
 8. **Month-to-date NSSA accumulation is not implemented.** If Q22 is answered as "accumulate within
@@ -158,22 +171,38 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
 9. **Mixed-currency remuneration is modelled but not calculated.** The refusal path is implemented
    and tested; the aggregate-and-apportion arithmetic waits on Q1 being answered, because building
    it now would mean guessing the conversion direction.
-10. **No payslip document, statutory obligation register or bank file yet** — Milestone 4, as
-    instructed.
+10. **No bank payment file and no statutory submission file** — deliberately not built. Neither
+    format could be obtained from an authoritative source, and inventing a layout would embed an
+    unverified assumption in a file sent to a bank or an authority. The data for both is modelled
+    and queryable, so they are a formatting exercise later, not a remodelling one.
+11. **The payslip prints through the browser, not to PDF directly.** `window.print()` against a
+    print stylesheet gives a correct A4 document and a PDF via the print dialogue. A direct
+    PDF writer is a Milestone 5 task.
+12. **Reports have no file export yet.** They render and print; CSV, Excel and PDF export follow
+    with the accounting export in Milestone 6.
+13. **Obligation due dates are derived from the configured rule, not from a verified calendar.**
+    The 10th for ZIMRA and NSSA and the 15th for ZIMDEF come from the seeded rules, which are
+    Supported at best. A due date shown as overdue should be checked against the authority's own
+    calendar until the deadline rules are verified.
 
 ## 7. Blocking questions
 
 Full register in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25; summary in
 `docs/OPEN_QUESTIONS.md`. Highest impact: **Q26** (PAYE fixed-deduction column — blocks all PAYE),
 **Q1** (multi-currency methodology), **Q22** (NSSA ceiling on weekly payroll), **Q6** (APWCS rate).
+All four remain open as at Milestone 4 and are restated in `docs/OPEN_QUESTIONS.md` so they cannot
+drift out of sight. New this milestone: **Q29** (does a ZWG monthly PAYE table exist?) and **Q30**
+(are the 2026 tables the 2025 tables carried forward?).
 
 ## 8. Next milestone
 
-**Milestone 4 — Payslips, statutory obligations and reports.** Not started; awaiting approval.
+**Milestone 5 — Time, attendance, leave and loans.** Not started.
 
-Planned: the payslip document (screen, print and PDF from one template); the statutory obligation
-register with the four independent states (calculated, deducted, approved, paid) and payment
-evidence; finalise, pay and lock transitions; and the core payroll reports, per currency.
+Planned: timesheets with ordinary, overtime, Sunday and public holiday hours feeding the payroll
+snapshot directly; timesheet approval; leave types, entitlements, balances and requests; the public
+holiday calendar; employee loans and advances with repayment schedules that generate scheduled
+deductions. These are the inputs that project-based and casual employees need before their payroll
+is anything other than manual.
 
 Live payroll stays blocked throughout: the engine calculates in development mode only until the
 verification checklist in the compliance specification is cleared.

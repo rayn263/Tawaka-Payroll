@@ -1,0 +1,520 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/reports"
+@page "/reports/{RunId:guid}"
+@using Tawaka.Application.Reports
+@using Tawaka.Domain.Statutory.Obligations
+@inject PayrollDbContext Db
+@inject PayrollReportService ReportService
+@inject UserSession Session
+@inject NavigationManager Nav
+
+@* Reports read persisted payroll results. No figure on this screen is calculated here: every
+   number comes from PayrollReportService, which aggregates stored rows and groups by currency
+   before it sums anything. *@
+
+<div class="page-header no-print">
+    <div>
+        <h1>Reports</h1>
+        <div class="subtitle">
+            Payroll, deduction, statutory, employer-cost, project and currency reports —
+            each reported separately per currency.
+        </div>
+    </div>
+    <div class="topbar-right">
+        @if (_runs.Count > 0)
+        {
+            <select @bind="SelectedRunId" @bind:after="LoadAsync">
+                @foreach (var run in _runs)
+                {
+                    <option value="@run.Id">
+                        @run.PayrollPeriod?.Name — run @run.RunNumber (@run.Status)
+                    </option>
+                }
+            </select>
+        }
+        <button class="btn btn-primary" @onclick="Print">Print</button>
+    </div>
+</div>
+
+@if (!Session.HasPermission(Permissions.ReportsRun))
+{
+    <div class="card">
+        <EmptyState Title="Not permitted"
+                    Description="Running reports requires the Reports.Run permission." />
+    </div>
+}
+else if (_runs.Count == 0)
+{
+    <div class="card">
+        <EmptyState Title="No payroll runs yet"
+                    Description="Reports are built from calculated payroll runs. Calculate a run first." />
+    </div>
+}
+else if (_reports is null)
+{
+    <div class="card"><EmptyState Title="Select a payroll run" /></div>
+}
+else
+{
+    <div class="card">
+        <div class="page-header">
+            <div>
+                <h2>@_reports.PeriodName</h2>
+                <div class="subtitle">Pay date @_reports.PayDate.ToString("dd MMMM yyyy")</div>
+            </div>
+            <StatusBadge Label="@(_reports.IsDevelopmentRun ? "DEVELOPMENT" : "LIVE")"
+                         Tone="@(_reports.IsDevelopmentRun ? "supported" : "verified")" />
+        </div>
+        @if (_reports.Currencies.Count > 1)
+        {
+            <div class="alert alert-info">
+                This run pays in @string.Join(" and ", _reports.CurrencySummary.Select(c => c.CurrencyLabel)).
+                Every report below is split by currency. No total on this screen adds one currency
+                to another.
+            </div>
+        }
+    </div>
+
+    <div class="tabs no-print">
+        @foreach (var tab in Tabs)
+        {
+            <button class="tab @(_tab == tab ? "active" : null)" @onclick="() => _tab = tab">@tab</button>
+        }
+    </div>
+
+    @if (_tab == "Currency summary" || _printing)
+    {
+        <div class="card">
+            <h2>Currency summary</h2>
+            <div class="scroll-x">
+                <table class="data">
+                    <thead>
+                    <tr><th>Currency</th><th class="num">Employees</th><th class="num">Gross</th>
+                        <th class="num">Deductions</th><th class="num">Net pay</th>
+                        <th class="num">Employer contributions</th><th class="num">Total employer cost</th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _reports.CurrencySummary)
+                    {
+                        <tr>
+                            <td class="strong">@row.CurrencyLabel</td>
+                            <td class="num">@row.Employees</td>
+                            <td class="num">@row.Gross.ToString("N2")</td>
+                            <td class="num">@row.TotalDeductions.ToString("N2")</td>
+                            <td class="num strong">@row.NetPay.ToString("N2")</td>
+                            <td class="num">@row.EmployerContributions.ToString("N2")</td>
+                            <td class="num">@row.TotalEmployerCost.ToString("N2")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted small">
+                These rows sit side by side deliberately. There is no combined row: a figure that
+                added USD to ZiG would be arithmetically meaningless, and somebody would eventually
+                put it in front of a director.
+            </p>
+        </div>
+    }
+
+    @if (_tab == "Summary" || _printing)
+    {
+        @foreach (var part in _reports.Summary)
+        {
+            <div class="card">
+                <h2>Payroll summary — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Employment type</th><th class="num">Employees</th><th class="num">Gross</th>
+                            <th class="num">Taxable</th><th class="num">PAYE</th><th class="num">AIDS Levy</th>
+                            <th class="num">NSSA (ee)</th><th class="num">Other deductions</th>
+                            <th class="num">Net pay</th><th class="num">Employer cost</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="strong">@row.Key</td>
+                                <td class="num">@row.Employees</td>
+                                <td class="num">@row.Gross.ToString("N2")</td>
+                                <td class="num">@row.Taxable.ToString("N2")</td>
+                                <td class="num">@row.Paye.ToString("N2")</td>
+                                <td class="num">@row.AidsLevy.ToString("N2")</td>
+                                <td class="num">@row.NssaEmployee.ToString("N2")</td>
+                                <td class="num">@row.OtherDeductions.ToString("N2")</td>
+                                <td class="num">@row.NetPay.ToString("N2")</td>
+                                <td class="num">@row.EmployerCost.ToString("N2")</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td class="strong">@part.Totals.Key</td>
+                            <td class="num">@part.Totals.Employees</td>
+                            <td class="num strong">@part.Totals.Gross.ToString("N2")</td>
+                            <td class="num">@part.Totals.Taxable.ToString("N2")</td>
+                            <td class="num">@part.Totals.Paye.ToString("N2")</td>
+                            <td class="num">@part.Totals.AidsLevy.ToString("N2")</td>
+                            <td class="num">@part.Totals.NssaEmployee.ToString("N2")</td>
+                            <td class="num">@part.Totals.OtherDeductions.ToString("N2")</td>
+                            <td class="num strong">@part.Totals.NetPay.ToString("N2")</td>
+                            <td class="num">@part.Totals.EmployerCost.ToString("N2")</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_tab == "Register" || _printing)
+    {
+        @foreach (var part in _reports.Register)
+        {
+            <div class="card">
+                <h2>Payroll register — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Number</th><th>Employee</th><th>Type</th><th>Department</th><th>Project</th>
+                            <th class="num">Gross</th><th class="num">Taxable</th><th class="num">PAYE</th>
+                            <th class="num">AIDS Levy</th><th class="num">NSSA (ee)</th>
+                            <th class="num">Other</th><th class="num">Net pay</th>
+                            <th class="num">Employer cost</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="mono">@row.EmployeeNumber</td>
+                                <td class="strong">@row.EmployeeName</td>
+                                <td>@row.EmploymentType</td>
+                                <td>@(row.Department ?? "—")</td>
+                                <td>@(row.Project ?? "—")</td>
+                                <td class="num">@Figure(row.Gross)</td>
+                                <td class="num">@Figure(row.Taxable)</td>
+                                <td class="num">@Figure(row.Paye)</td>
+                                <td class="num">@Figure(row.AidsLevy)</td>
+                                <td class="num">@Figure(row.NssaEmployee)</td>
+                                <td class="num">@Figure(row.OtherDeductions)</td>
+                                <td class="num strong">@Figure(row.NetPay)</td>
+                                <td class="num">@Figure(row.EmployerCost)</td>
+                                <td>
+                                    @if (row.UnresolvedCount > 0)
+                                    {
+                                        <span class="badge unverified"
+                                              title="Figures this employee could not be given because a statutory rule is unresolved">
+                                            @row.UnresolvedCount unresolved
+                                        </span>
+                                    }
+                                    else if (!row.IsCalculated)
+                                    {
+                                        <span class="muted">not calculated</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="5" class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num strong">@Figure(part.Totals.Gross)</td>
+                            <td class="num">@Figure(part.Totals.Taxable)</td>
+                            <td class="num">@Figure(part.Totals.Paye)</td>
+                            <td class="num">@Figure(part.Totals.AidsLevy)</td>
+                            <td class="num">@Figure(part.Totals.NssaEmployee)</td>
+                            <td class="num">@Figure(part.Totals.OtherDeductions)</td>
+                            <td class="num strong">@Figure(part.Totals.NetPay)</td>
+                            <td class="num">@Figure(part.Totals.EmployerCost)</td>
+                            <td></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                @if (part.Totals.UnresolvedCount > 0)
+                {
+                    <p class="muted small">
+                        @part.Totals.UnresolvedCount unresolved item(s) in this section. An
+                        unresolved figure is absent, not zero: the totals above exclude it, so this
+                        register is not yet a complete statement of the payroll.
+                    </p>
+                }
+            </div>
+        }
+    }
+
+    @if (_tab == "Deductions" || _printing)
+    {
+        @foreach (var part in _reports.Deductions)
+        {
+            <div class="card">
+                <h2>Deductions — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Code</th><th>Deduction</th><th>Type</th>
+                            <th class="num">Employees</th><th class="num">Total</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="mono">@row.Code</td>
+                                <td class="strong">@row.Name</td>
+                                <td>@(row.IsStatutory ? "Statutory" : "Other")</td>
+                                <td class="num">@row.Employees</td>
+                                <td class="num">@row.Total.ToString("N2")</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">@part.Totals.Name (@part.CurrencyLabel)</td>
+                            <td class="num">@part.Totals.Employees</td>
+                            <td class="num strong">@part.Totals.Total.ToString("N2")</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_tab == "Employer cost" || _printing)
+    {
+        @foreach (var part in _reports.EmployerCosts)
+        {
+            <div class="card">
+                <h2>Employer cost — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Code</th><th>Component</th><th class="num">Employees</th>
+                            <th class="num">Base</th><th class="num">Amount</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr class="@(row.Code == "GROSS" ? "strong" : null)">
+                                <td class="mono">@row.Code</td>
+                                <td>@row.Name</td>
+                                <td class="num">@row.Employees</td>
+                                <td class="num">@row.Base.ToString("N2")</td>
+                                <td class="num">@row.Amount.ToString("N2")</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">@part.Totals.Name (@part.CurrencyLabel)</td>
+                            <td class="num"></td>
+                            <td class="num strong">@part.Totals.Amount.ToString("N2")</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="muted small">
+                    Gross earnings are listed as a component so the report reconciles:
+                    gross + employer contributions = total cost of employment.
+                </p>
+            </div>
+        }
+    }
+
+    @if (_tab == "Statutory" || _printing)
+    {
+        @if (_reports.Statutory.Count == 0)
+        {
+            <div class="card">
+                <EmptyState Title="No obligations for this run"
+                            Description="Statutory obligations are created when a payroll run is finalised." />
+            </div>
+        }
+        @foreach (var part in _reports.Statutory)
+        {
+            <div class="card">
+                <h2>Statutory obligations — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Authority</th><th>Obligation</th><th>Due</th>
+                            <th class="num">Calculated</th><th class="num">Deducted</th>
+                            <th class="num">Approved</th><th class="num">Paid</th>
+                            <th class="num">Outstanding</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td>@row.Authority</td>
+                                <td class="strong">@Describe(row.ObligationType)</td>
+                                <td>@(row.DueDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td class="num">@row.Calculated.ToString("N2")</td>
+                                <td class="num">
+                                    @if (row.DeductionApplicable)
+                                    {
+                                        @row.Deducted.ToString("N2")
+                                    }
+                                    else
+                                    {
+                                        <span class="muted" title="Employer-borne: nothing is withheld from employees">n/a</span>
+                                    }
+                                </td>
+                                <td class="num">@row.Approved.ToString("N2")</td>
+                                <td class="num">@row.Paid.ToString("N2")</td>
+                                <td class="num strong">@row.Outstanding.ToString("N2")</td>
+                                <td><StatusBadge Label="@row.Status.ToString()" Tone="@Tone(row.Status)" /></td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td colspan="3" class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num strong">@part.Totals.Calculated.ToString("N2")</td>
+                            <td class="num">@part.Totals.Deducted.ToString("N2")</td>
+                            <td class="num">@part.Totals.Approved.ToString("N2")</td>
+                            <td class="num">@part.Totals.Paid.ToString("N2")</td>
+                            <td class="num strong">@part.Totals.Outstanding.ToString("N2")</td>
+                            <td></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="muted small">
+                    Paid is the sum of recorded, unreversed payments. A run being approved does not
+                    make any of these paid.
+                    <a class="no-print" href="statutory/obligations">Open the obligation register</a>
+                </p>
+            </div>
+        }
+    }
+
+    @if (_tab == "Project labour cost" || _printing)
+    {
+        @foreach (var part in _reports.ProjectLabourCost)
+        {
+            <div class="card">
+                <h2>Project and site labour cost — @part.CurrencyLabel</h2>
+                <div class="scroll-x">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Project</th><th class="num">Allocations</th>
+                            <th class="num">Allocated cost</th><th class="num">Share</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in part.Rows)
+                        {
+                            <tr>
+                                <td class="strong">@row.ProjectName</td>
+                                <td class="num">@row.Employees</td>
+                                <td class="num">@row.AllocatedCost.ToString("N2")</td>
+                                <td class="num">@row.Percent.ToString("N2")%</td>
+                            </tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                        <tr class="totals">
+                            <td class="strong">Total (@part.CurrencyLabel)</td>
+                            <td class="num">@part.Totals.Employees</td>
+                            <td class="num strong">@part.Totals.AllocatedCost.ToString("N2")</td>
+                            <td class="num">@part.Totals.Percent.ToString("N2")%</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter] public Guid? RunId { get; set; }
+
+    private static readonly string[] Tabs =
+    {
+        "Currency summary", "Summary", "Register", "Deductions", "Employer cost", "Statutory",
+        "Project labour cost"
+    };
+
+    private List<PayrollRun> _runs = new();
+    private PayrollRunReports? _reports;
+    private string _tab = "Currency summary";
+    private bool _printing;
+
+    private Guid SelectedRunId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _runs = Db.PayrollRuns.AsNoTracking()
+            .Include(r => r.PayrollPeriod)
+            .Where(r => r.CompanyId == companyId && r.CalculatedAt != null)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToList();
+
+        if (_runs.Count == 0)
+        {
+            _reports = null;
+            return;
+        }
+
+        var requested = RunId ?? (SelectedRunId == Guid.Empty ? _runs[0].Id : SelectedRunId);
+        if (_reports is null || requested != SelectedRunId)
+        {
+            SelectedRunId = _runs.Any(r => r.Id == requested) ? requested : _runs[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!Session.HasPermission(Permissions.ReportsRun) || SelectedRunId == Guid.Empty)
+        {
+            return;
+        }
+
+        _reports = await ReportService.BuildAsync(SelectedRunId);
+    }
+
+    /// <summary>
+    /// An absent figure is not a zero. A null here means the engine could not produce the number,
+    /// so it is shown as an em dash rather than as 0.00.
+    /// </summary>
+    private static string Figure(decimal? amount) => amount?.ToString("N2") ?? "—";
+
+    private static string Describe(StatutoryObligationType type) => type switch
+    {
+        StatutoryObligationType.Paye => "PAYE",
+        StatutoryObligationType.AidsLevy => "AIDS Levy",
+        StatutoryObligationType.NssaPobsEmployee => "NSSA employee (POBS)",
+        StatutoryObligationType.NssaPobsEmployer => "NSSA employer (POBS)",
+        StatutoryObligationType.Apwcs => "APWCS",
+        StatutoryObligationType.Zimdef => "ZIMDEF levy",
+        StatutoryObligationType.StandardsDevelopmentFund => "Standards Development Fund",
+        StatutoryObligationType.NecEmployee => "NEC (employee)",
+        StatutoryObligationType.NecEmployer => "NEC (employer)",
+        _ => type.ToString()
+    };
+
+    private static string Tone(StatutoryObligationStatus status) => status switch
+    {
+        StatutoryObligationStatus.Paid => "verified",
+        StatutoryObligationStatus.Overdue => "unverified",
+        StatutoryObligationStatus.PartiallyPaid or StatutoryObligationStatus.Approved => "supported",
+        _ => "disabled"
+    };
+
+    private async Task Print()
+    {
+        // Printing shows every section, not only the open tab: a printed report that silently
+        // omitted the other reports would be read as the whole payroll.
+        _printing = true;
+        StateHasChanged();
+        await Task.Yield();
+        await Js.InvokeVoidAsync("window.print");
+        _printing = false;
+    }
+
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+}

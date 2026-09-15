@@ -488,6 +488,18 @@ Payslip rules:
 - Each payslip stores a content hash; re-issuing a payslip after a reopen produces a new version
   with a visible revision marker, and the superseded version is retained.
 
+**As built at Milestone 4.** `PayslipBuilder` assembles the document from persisted payroll results
+and performs no arithmetic of its own (ADR-028). Delivered: the header and employee blocks, the
+earnings and deductions columns with configured statutory categories shown even at zero, net pay,
+the employer contribution block, the statutory status block, the unresolved-items note, the
+development watermark, numbering, revisions and supersession. **Not yet delivered:** the
+year-to-date band, the leave summary and the loan balance, each of which needs a module that
+arrives in Milestone 5; and PDF output, which currently goes through the browser's print dialogue
+against a print stylesheet rather than a PDF writer.
+
+An unresolved figure renders as `—`, never as `0.00`: the two are different states on the document
+as well as in the engine (ADR-024).
+
 ---
 
 ## 9. Security model
@@ -541,6 +553,7 @@ company setting, and disabling it is itself an audited event.
 ## 10. Feature status
 
 ### Completed
+
 **Milestone 1 — Foundation** (2026-09-12): nine-project solution; `Money`, `CurrencyCode`,
 `DateRange` value objects; currency and exchange-rate model with full conversion provenance;
 versioned statutory rule model with verification metadata and source references; EF Core context,
@@ -548,31 +561,48 @@ configurations and the `InitialFoundation` migration (16 tables, SQLite, scaled-
 audit interceptor; period-lock interceptor with authorised override; statutory rule resolver with
 no-substitution guarantee; live payroll gate; calculation-trace infrastructure; statutory seed data
 graded honestly; DI composition root; WPF/Blazor desktop shell scaffold (Windows-only, uncompiled);
-cross-platform foundation CLI; 91 passing tests. See `PROJECT_STATE.md`.
+cross-platform foundation CLI; 91 passing tests.
+
+**Milestone 2 — Company, employees and security** (2026-09-13): company profile and settings;
+departments, job titles, locations, clients, projects and sites; employment types; the employee
+master with status history rather than deletion; effective-dated contract versioning; statutory
+profiles, payment accounts, next of kin and documents; earning and deduction types with graded
+statutory treatment; recurring earnings and deductions; authentication with PBKDF2, roles,
+permissions and declared segregation of duties; the real screens for all of it (28 tables).
+
+**Milestone 3 — Payroll periods and the calculation engine** (2026-09-13): payroll periods and
+runs; the immutable `PayrollInputSnapshot`; the ordered calculation pipeline; the PAYE table
+engine with both published table forms; NSSA with ceiling resolution; one rounding policy;
+unresolved-is-not-zero throughout; the persisted calculation trace and "Explain my pay"; the
+payroll preview (8 tables).
+
+**Milestone 4 — Payslips, statutory obligations and reports** (2026-09-15): the payslip document
+rendered from persisted results only, with watermarking, revisions and supersession; statutory
+obligations with four independent states and derived `IsPaid`; payment recording with mandatory
+reference, partial payments and audited reversal; the approve → finalise → paid → locked workflow;
+the lock extended to a run's result rows; the seven core reports, each split by currency; the
+obligation register and reports screens (4 tables, 56 in total).
 
 ### In progress
-- Nothing. Milestone 1 is complete and awaiting approval before Milestone 2 begins.
+- Nothing. Milestone 4 is complete and awaiting approval before Milestone 5 begins.
 
 ### Pending — Phase 1
-Company setup · employee management · employment types · salary setup · payroll periods ·
-earning types · deduction types · PAYE engine · AIDS Levy · NSSA POBS · APWCS · dual-currency
-core · payslips · core payroll reports · database and migrations · settings · users and roles.
+Report file export (PDF, Excel, CSV) · dashboard warning cards beyond the counters · backup and
+restore.
 
 ### Pending — Phase 2
-Timesheets · projects and sites · loans · advances · leave · statutory payment tracking screens ·
-full audit log UI · granular permissions.
+Timesheets · leave · loans and advances · public holiday calendar · the full audit log screen ·
+the reopen diff report · casual six-week and contract expiry warnings.
 
 ### Pending — Phase 3
-Accounting/journal export · advanced reporting · bank payment files · multi-company · cloud
-backup · advanced statutory returns.
+Accounting/journal export · statutory return exports · bank payment files · advanced reporting ·
+multi-company · cloud backup · employee self-service.
 
 ### Known bugs and limitations
-See `PROJECT_STATE.md` §6. The significant one: the desktop shell targets `net8.0-windows` and has
-never been compiled, because the build environment is Linux. Its C#, XAML and Razor are written but
-unverified.
+See `PROJECT_STATE.md` §6. The significant ones: the desktop shell targets `net8.0-windows` and has
+never been compiled, because the build environment is Linux; and no Razor screen has been rendered
+or clicked, only type-checked.
 
 ### Next development step
-Milestone 1 complete and pushed; awaiting approval. Next is **Milestone 2 — company, employees and
-contract versioning**, detailed in `PROJECT_STATE.md` §8. Not started: solution skeleton, `Money`/`CurrencyCode` value
-objects, EF Core context with audit and lock interceptors, and the statutory rule tables with
-seed data and verification metadata.
+Milestone 4 complete and pushed; awaiting approval. Next is **Milestone 5 — time, attendance,
+leave and loans**, detailed in `PROJECT_STATE.md` §8.

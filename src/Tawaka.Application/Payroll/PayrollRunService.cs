@@ -8,6 +8,7 @@ using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Payroll.Engine;
 using Tawaka.Payroll.Engine.Results;
+using Tawaka.Application.Statutory.Obligations;
 
 namespace Tawaka.Application.Payroll;
 
@@ -23,16 +24,18 @@ public sealed class PayrollRunService
 {
     private readonly IPayrollDataContext _context;
     private readonly PayrollSnapshotBuilder _snapshots;
+    private readonly StatutoryObligationService _obligations;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
     private readonly PayrollCalculator _calculator = new();
 
     public PayrollRunService(
-        IPayrollDataContext context, PayrollSnapshotBuilder snapshots, ICurrentUser currentUser,
-        IClock clock)
+        IPayrollDataContext context, PayrollSnapshotBuilder snapshots,
+        StatutoryObligationService obligations, ICurrentUser currentUser, IClock clock)
     {
         _context = context;
         _snapshots = snapshots;
+        _obligations = obligations;
         _currentUser = currentUser;
         _clock = clock;
     }
@@ -209,6 +212,106 @@ public sealed class PayrollRunService
         run.Status = PayrollRunStatus.Approved;
         run.ApprovedBy = _currentUser.UserId;
         run.ApprovedAt = _clock.Now;
+        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return validation;
+    }
+
+    /// <summary>
+    /// Finalises an approved run. This is the point at which the money is treated as withheld, so
+    /// it creates the statutory obligations with Calculated and Deducted set — and nothing more.
+    /// Approval of a payroll never marks an obligation paid.
+    /// </summary>
+    public async Task<ValidationResult> FinaliseAsync(
+        Guid runId, CancellationToken cancellationToken = default)
+    {
+        _currentUser.Require(Permissions.PayrollFinalise);
+
+        var validation = ValidationResult.Success();
+        var run = await _context.PayrollRuns
+            .Include(r => r.PayrollPeriod)
+            .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+
+        if (run is null)
+        {
+            return validation.Add("Run", "Payroll run not found.");
+        }
+
+        validation.AddIf(run.Status != PayrollRunStatus.Approved, "Run",
+            $"Only an approved run can be finalised. This run is {run.Status}.");
+
+        if (!validation.IsValid)
+        {
+            return validation;
+        }
+
+        run.Status = PayrollRunStatus.Finalised;
+        run.FinalisedBy = _currentUser.UserId;
+        run.FinalisedAt = _clock.Now;
+        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await _obligations.CreateForRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        return validation;
+    }
+
+    /// <summary>
+    /// Records that employees were paid their net wages. This says nothing about the statutory
+    /// authorities: those are settled separately, with their own evidence.
+    /// </summary>
+    public async Task<ValidationResult> MarkNetWagesPaidAsync(
+        Guid runId, CancellationToken cancellationToken = default)
+    {
+        _currentUser.Require(Permissions.PayrollRecordPayment);
+
+        var validation = ValidationResult.Success();
+        var run = await _context.PayrollRuns
+            .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+
+        if (run is null)
+        {
+            return validation.Add("Run", "Payroll run not found.");
+        }
+
+        validation.AddIf(run.Status != PayrollRunStatus.Finalised, "Run",
+            $"Only a finalised run can be marked paid. This run is {run.Status}.");
+
+        if (!validation.IsValid)
+        {
+            return validation;
+        }
+
+        run.Status = PayrollRunStatus.Paid;
+        run.PaidBy = _currentUser.UserId;
+        run.PaidAt = _clock.Now;
+        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return validation;
+    }
+
+    /// <summary>Locks a run. From here the figures are immutable at the data layer.</summary>
+    public async Task<ValidationResult> LockAsync(
+        Guid runId, CancellationToken cancellationToken = default)
+    {
+        _currentUser.Require(Permissions.PayrollLock);
+
+        var validation = ValidationResult.Success();
+        var run = await _context.PayrollRuns
+            .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+
+        if (run is null)
+        {
+            return validation.Add("Run", "Payroll run not found.");
+        }
+
+        validation.AddIf(run.Status is not (PayrollRunStatus.Finalised or PayrollRunStatus.Paid),
+            "Run", $"Only a finalised or paid run can be locked. This run is {run.Status}.");
+
+        if (!validation.IsValid)
+        {
+            return validation;
+        }
+
+        run.Status = PayrollRunStatus.Locked;
+        run.LockedBy = _currentUser.UserId;
+        run.LockedAt = _clock.Now;
         await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return validation;
     }

@@ -26,3 +26,19 @@ public interface ILockable
 {
     bool IsLocked { get; }
 }
+
+/// <summary>
+/// A row that is part of a payroll run's calculated result, and is therefore frozen when that run
+/// is locked.
+/// <para>
+/// The run itself is <see cref="ILockable"/>, but its result rows are not: they have no status of
+/// their own. Without this marker a locked run's header would be protected while the figures
+/// underneath it could still be edited, which is the opposite of what locking is for. Deliberate
+/// later events — a statutory payment, a payslip re-issue — are not result rows and are not
+/// marked.
+/// </para>
+/// </summary>
+public interface IPayrollResultRow
+{
+    Guid PayrollRunEmployeeId { get; }
+}

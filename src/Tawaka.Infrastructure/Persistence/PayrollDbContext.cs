@@ -9,6 +9,7 @@ using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Statutory;
+using Tawaka.Domain.Statutory.Obligations;
 
 namespace Tawaka.Infrastructure.Persistence;
 
@@ -71,6 +72,17 @@ public class PayrollDbContext : DbContext, IPayrollDataContext
     public DbSet<PayrollUnresolvedItem> PayrollUnresolvedItems => Set<PayrollUnresolvedItem>();
 
     public DbSet<PayrollCostAllocation> PayrollCostAllocations => Set<PayrollCostAllocation>();
+
+    // ---- Statutory obligations and payslips -------------------------------------------------
+
+    public DbSet<StatutoryObligation> StatutoryObligations => Set<StatutoryObligation>();
+
+    public DbSet<StatutoryObligationLine> StatutoryObligationLines =>
+        Set<StatutoryObligationLine>();
+
+    public DbSet<StatutoryPayment> StatutoryPayments => Set<StatutoryPayment>();
+
+    public DbSet<Payslip> Payslips => Set<Payslip>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

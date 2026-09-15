@@ -375,3 +375,116 @@ tr.unresolved-row td { background: var(--unverified-bg); }
 .explain-rounding { font-size: 12.5px; color: var(--ink-muted); margin-top: 6px; }
 .explain-note { font-size: 12.5px; margin-top: 6px; color: var(--ink-soft); }
 .explain-source { font-size: 11.5px; color: var(--ink-muted); margin-top: 4px; font-style: italic; }
+
+/* ---- Payslip -------------------------------------------------------------
+   The payslip is a document, not a screen: it is sized to A4 and styled so the
+   printed sheet and the screen show the same thing. Nothing here calculates;
+   every figure is rendered by PayslipBuilder from persisted results.           */
+
+.payslip {
+    position: relative;
+    background: #fff;
+    color: #101520;
+    width: min(210mm, 100%);
+    margin: 0 auto 24px;
+    padding: 16mm 14mm;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 10px rgba(16, 21, 28, .06);
+    font-size: 12.5px;
+}
+
+.payslip.watermarked { border-color: var(--unverified); }
+
+.payslip-watermark {
+    position: absolute; top: 44%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-24deg);
+    font-size: 30px; font-weight: 800; letter-spacing: 2px; white-space: nowrap;
+    color: var(--unverified); opacity: .16; pointer-events: none; user-select: none;
+    z-index: 2;
+}
+
+.payslip-head {
+    display: flex; justify-content: space-between; gap: 24px;
+    padding-bottom: 12px; border-bottom: 2px solid #101520;
+}
+.payslip-company { font-size: 17px; font-weight: 700; }
+.payslip-title { font-size: 19px; font-weight: 800; letter-spacing: 3px; }
+.payslip-head-right { text-align: right; }
+.payslip-meta { font-size: 11.5px; color: #4a5361; margin-top: 2px; }
+.payslip-currency {
+    margin-top: 6px; font-weight: 700; letter-spacing: 1px;
+    /* The currency is stated once, prominently: a USD payslip and a ZiG payslip
+       must never be mistaken for one another. */
+}
+
+.payslip-employee { padding: 12px 0; border-bottom: 1px solid #d7dbe2; }
+.payslip-employee dl {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px 18px; margin: 0;
+}
+.payslip-employee dt { color: #4a5361; font-size: 11.5px; }
+.payslip-employee dd { margin: 0 0 4px; font-weight: 600; }
+
+.payslip-columns {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px; padding: 12px 0;
+}
+.payslip-columns h3 {
+    margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: #4a5361;
+}
+
+.payslip-table { width: 100%; border-collapse: collapse; }
+.payslip-table th, .payslip-table td { padding: 4px 0; text-align: left; }
+.payslip-table td.num, .payslip-table th.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+}
+.payslip-table tfoot td {
+    border-top: 1px solid #101520; font-weight: 700; padding-top: 6px;
+}
+
+.payslip-net {
+    margin: 12px 0; padding: 10px 14px; background: #f2f5f9;
+    border: 1px solid #d7dbe2; border-radius: 6px;
+}
+.payslip-net .payslip-table td { font-size: 14px; font-weight: 700; }
+
+.payslip-notes {
+    margin-top: 12px; padding: 10px 12px;
+    background: var(--unverified-bg); border-left: 3px solid var(--unverified); border-radius: 4px;
+}
+.payslip-notes h3 { margin: 0 0 6px; font-size: 12px; }
+.payslip-notes li { font-size: 11.5px; margin-bottom: 4px; }
+
+.payslip-foot {
+    margin-top: 14px; padding-top: 10px; border-top: 1px solid #d7dbe2;
+    font-size: 10.5px; color: #4a5361;
+}
+
+/* ---- Printing ------------------------------------------------------------
+   Anything marked .no-print is screen furniture: navigation, buttons, tabs.
+   A printed payslip or report carries only the document itself.                */
+
+.no-print { }
+
+@media print {
+    .no-print, nav, .sidebar, .topbar, .tabs { display: none !important; }
+    body { background: #fff; }
+    .page, .content, main { padding: 0 !important; margin: 0 !important; }
+
+    .payslip {
+        width: auto; border: none; box-shadow: none; border-radius: 0;
+        padding: 0; margin: 0;
+        page-break-after: always;
+    }
+    .payslip-watermark { opacity: .2; }
+
+    .card {
+        border: none; box-shadow: none; padding: 0; margin: 0 0 14px;
+        page-break-inside: avoid;
+    }
+    .scroll-x { overflow: visible; }
+    .scroll-x table { min-width: 0; }
+    table.data { font-size: 10px; }
+}

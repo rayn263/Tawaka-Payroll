@@ -1,0 +1,220 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/payroll/payslip/{RunEmployeeId:guid}"
+@using Tawaka.Application.Payslips
+@inject PayslipBuilder Payslips
+@inject UserSession Session
+
+@* Renders a persisted payroll result. No payroll arithmetic happens here or anywhere below it. *@
+
+@if (_payslip is null)
+{
+    <div class="card"><EmptyState Title="Payslip not available" /></div>
+}
+else
+{
+    <div class="page-header no-print">
+        <h1>Payslip</h1>
+        <div class="topbar-right">
+            @if (Session.HasPermission(Permissions.PayrollFinalise) && !_payslip.IsDevelopmentCopy)
+            {
+                <button class="btn btn-secondary" @onclick="GenerateAsync">Issue payslip</button>
+            }
+            <button class="btn btn-primary" @onclick="Print">Print</button>
+        </div>
+    </div>
+
+    <ValidationSummaryPanel Result="_validation" />
+
+    <div class="payslip @(_payslip.IsDevelopmentCopy ? "watermarked" : null)">
+        @if (_payslip.IsDevelopmentCopy)
+        {
+            <div class="payslip-watermark">DEVELOPMENT — NOT FOR STATUTORY USE</div>
+        }
+
+        <header class="payslip-head">
+            <div>
+                <div class="payslip-company">@_payslip.Company.Name</div>
+                <div class="payslip-meta">@_payslip.Company.Address</div>
+                <div class="payslip-meta">@_payslip.Company.Phone @_payslip.Company.Email</div>
+                <div class="payslip-meta">
+                    Tax/BP: @Show(_payslip.Company.TaxNumber) ·
+                    NSSA employer: @Show(_payslip.Company.NssaEmployerNumber)
+                </div>
+            </div>
+            <div class="payslip-head-right">
+                <div class="payslip-title">PAYSLIP</div>
+                <div class="payslip-meta">No: @Show(_payslip.PayslipNumber)
+                    @(_payslip.Revision > 1 ? $"(rev {_payslip.Revision})" : string.Empty)</div>
+                <div class="payslip-meta">Period: @_payslip.PeriodStart.ToString("dd MMM") –
+                    @_payslip.PeriodEnd.ToString("dd MMM yyyy")</div>
+                <div class="payslip-meta">Payment date: @_payslip.PayDate.ToString("dd MMM yyyy")</div>
+                <div class="payslip-currency">CURRENCY: @_payslip.CurrencyLabel</div>
+            </div>
+        </header>
+
+        <section class="payslip-employee">
+            <dl>
+                <dt>Employee</dt><dd>@_payslip.Employee.Name</dd>
+                <dt>Employee number</dt><dd>@_payslip.Employee.Number</dd>
+                <dt>National ID</dt><dd>@Show(_payslip.Employee.NationalId)</dd>
+                <dt>Job title</dt><dd>@Show(_payslip.Employee.JobTitle)</dd>
+            </dl>
+            <dl>
+                <dt>Department</dt><dd>@Show(_payslip.Employee.Department)</dd>
+                <dt>Employment type</dt><dd>@_payslip.Employee.EmploymentType</dd>
+                <dt>Project / site</dt><dd>@Show(_payslip.Employee.Project)</dd>
+                <dt>Paid by</dt><dd>@Show(_payslip.Employee.AccountDetail)</dd>
+            </dl>
+        </section>
+
+        <section class="payslip-columns">
+            <div>
+                <h3>EARNINGS</h3>
+                <table class="payslip-table">
+                    <tbody>
+                    @foreach (var line in _payslip.Earnings)
+                    {
+                        <tr>
+                            <td>
+                                @line.Name
+                                @if (line.Detail is not null)
+                                {
+                                    <span class="muted small"> @line.Detail</span>
+                                }
+                                @if (line.IsConverted)
+                                {
+                                    <div class="muted small">
+                                        Originally @line.OriginalCurrency @line.OriginalAmount?.ToString("N2")
+                                        at @line.ExchangeRate?.ToString("N4")
+                                        on @line.RateDate?.ToString("dd MMM yyyy")
+                                        (@line.RateSource)
+                                    </div>
+                                }
+                            </td>
+                            <td class="num">@Amount(line.Amount)</td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                    <tr><td class="strong">GROSS EARNINGS</td>
+                        <td class="num strong">@Amount(_payslip.GrossEarnings)</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div>
+                <h3>DEDUCTIONS</h3>
+                <table class="payslip-table">
+                    <tbody>
+                    @foreach (var line in _payslip.Deductions)
+                    {
+                        <tr>
+                            <td>@line.Name</td>
+                            <td class="num">@Amount(line.Amount)</td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                    <tr><td class="strong">TOTAL DEDUCTIONS</td>
+                        <td class="num strong">@Amount(_payslip.TotalDeductions)</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+
+        <section class="payslip-net">
+            <span>NET PAY</span>
+            <span>@_payslip.CurrencyLabel @Amount(_payslip.NetPay)</span>
+        </section>
+
+        <section>
+            <h3>EMPLOYER CONTRIBUTIONS <span class="muted small">(not deducted from the employee)</span></h3>
+            <table class="payslip-table">
+                <tbody>
+                @foreach (var line in _payslip.EmployerContributions)
+                {
+                    <tr><td>@line.Name</td><td class="num">@Amount(line.Amount)</td></tr>
+                }
+                <tr><td class="strong">Total cost of employment</td>
+                    <td class="num strong">@Amount(_payslip.TotalEmployerCost)</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h3>STATUTORY STATUS — this period</h3>
+            <table class="payslip-table">
+                <thead>
+                <tr><th>Item</th><th class="num">Amount</th><th>Deducted</th><th>Approved</th>
+                    <th>Remitted</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var status in _payslip.StatutoryStatus)
+                {
+                    <tr>
+                        <td>@status.Name</td>
+                        <td class="num">@Amount(status.Amount)</td>
+                        <td>@(status.DeductionApplicable ? Tick(status.IsDeducted) : "n/a")</td>
+                        <td>@Tick(status.IsApproved)</td>
+                        <td>@Tick(status.IsRemitted)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <p class="muted small">
+                "Remitted" reflects a recorded payment to the authority. An unticked box means the
+                payment has not been recorded — it never means the amount is not owed.
+            </p>
+        </section>
+
+        @if (_payslip.HasUnresolvedFigures)
+        {
+            <section class="payslip-notes">
+                <h3>FIGURES THAT COULD NOT BE CALCULATED</h3>
+                <ul>
+                    @foreach (var note in _payslip.UnresolvedNotes)
+                    {
+                        <li>@note</li>
+                    }
+                </ul>
+                <p class="muted small">
+                    Shown as “—” above. A dash is not zero: the rule needed for the figure was
+                    missing or unverified, so no amount could be produced.
+                </p>
+            </section>
+        }
+
+        <footer class="payslip-foot">
+            <div>Prepared by: ______________________</div>
+            <div>Approved by: ______________________</div>
+        </footer>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RunEmployeeId { get; set; }
+
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+
+    private PayslipDocument? _payslip;
+    private ValidationResult? _validation;
+
+    protected override async Task OnParametersSetAsync() =>
+        _payslip = await Payslips.BuildAsync(RunEmployeeId);
+
+    private static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    /// <summary>A real zero renders 0.00; an unresolved figure renders an em dash.</summary>
+    private static string Amount(PayslipAmount amount) => amount.Display();
+
+    private static string Tick(bool value) => value ? "✔" : "✘";
+
+    private async Task Print() => await Js.InvokeVoidAsync("window.print");
+
+    private async Task GenerateAsync()
+    {
+        var result = await Payslips.GenerateAsync(RunEmployeeId);
+        _validation = result.Succeeded ? null : result.Validation;
+        _payslip = await Payslips.BuildAsync(RunEmployeeId);
+    }
+}

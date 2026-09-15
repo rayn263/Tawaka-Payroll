@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Employees;
 using Tawaka.Application.Payroll;
+using Tawaka.Application.Payslips;
+using Tawaka.Application.Reports;
+using Tawaka.Application.Statutory.Obligations;
 using Tawaka.Application.Security;
 using Tawaka.Application.Statutory;
 using Tawaka.Infrastructure.Interceptors;
@@ -53,6 +56,9 @@ public static class DependencyInjection
         services.AddScoped<EmployeeContractService>();
         services.AddScoped<PayrollSnapshotBuilder>();
         services.AddScoped<PayrollRunService>();
+        services.AddScoped<StatutoryObligationService>();
+        services.AddScoped<PayslipBuilder>();
+        services.AddScoped<PayrollReportService>();
 
         services.AddScoped<StatutoryRuleSeeder>();
         services.AddScoped<CompanySeeder>();
