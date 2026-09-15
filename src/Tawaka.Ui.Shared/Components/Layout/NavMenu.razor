@@ -1,9 +1,7 @@
 @namespace Tawaka.Ui.Shared.Components.Layout
 @inject UserSession Session
 
-@* Navigation is permission-trimmed: a user never sees a screen they cannot open. Modules that
-   are not built yet are shown with the milestone they arrive in, rather than as empty pages
-   pretending to be finished. *@
+@* Navigation is permission-trimmed: a user never sees a screen they cannot open. *@
 
 <nav>
     <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
@@ -23,8 +21,32 @@
         <NavLink href="projects">Projects &amp; Sites</NavLink>
     }
 
-    <NavLink href="time">Time &amp; Attendance <span class="nav-pill">M5</span></NavLink>
-    <NavLink href="loans">Loans &amp; Advances <span class="nav-pill">M5</span></NavLink>
+    @if (Session.HasPermission(Permissions.TimeView))
+    {
+        <NavLink href="time">Time &amp; Attendance</NavLink>
+    }
+
+    @if (Session.HasPermission(Permissions.LeaveView))
+    {
+        <NavLink href="leave">Leave</NavLink>
+    }
+
+    @if (Session.HasPermission(Permissions.CalendarView))
+    {
+        <NavLink href="calendar">Holiday Calendar</NavLink>
+    }
+
+    @if (Session.HasPermission(Permissions.LoansView))
+    {
+        <NavLink href="loans">Loans &amp; Advances</NavLink>
+    }
+
+    @if (Session.HasPermission(Permissions.TimeApprove) ||
+         Session.HasPermission(Permissions.LeaveApprove) ||
+         Session.HasPermission(Permissions.LoansApprove))
+    {
+        <NavLink href="approvals">Approvals</NavLink>
+    }
 
     @if (Session.HasPermission(Permissions.StatutoryView))
     {

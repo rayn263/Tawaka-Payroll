@@ -93,6 +93,9 @@ public sealed class SecuritySeeder
             Permissions.PayrollView, Permissions.PayrollLock, Permissions.PayrollReopen,
             Permissions.StatutoryView, Permissions.StatutoryEditRules,
             Permissions.StatutoryVerifyRules, Permissions.StatutoryRecordPayment,
+            Permissions.TimeView, Permissions.LeaveView,
+            Permissions.CalendarView, Permissions.CalendarEdit,
+            Permissions.LoansView, Permissions.LoansDisburse,
             Permissions.ReportsRun, Permissions.ReportsExport,
             Permissions.UsersManage, Permissions.AuditView, Permissions.SettingsEdit
         };
@@ -106,6 +109,13 @@ public sealed class SecuritySeeder
             Permissions.PayrollFinalise, Permissions.PayrollRecordPayment,
             Permissions.StatutoryView, Permissions.StatutoryRecordPayment,
             Permissions.CompanyView,
+
+            // The officer captures inputs. Approving them is the manager's, because a person who
+            // can both enter and approve their own time, leave or loan is a control failure.
+            Permissions.TimeView, Permissions.TimeEdit,
+            Permissions.LeaveView, Permissions.LeaveEdit,
+            Permissions.CalendarView,
+            Permissions.LoansView, Permissions.LoansEdit,
             Permissions.ReportsRun, Permissions.ReportsExport
         };
 
@@ -116,13 +126,19 @@ public sealed class SecuritySeeder
             Permissions.PayrollView, Permissions.PayrollApprove,
             Permissions.StatutoryView,
             Permissions.CompanyView,
+            Permissions.TimeView, Permissions.TimeApprove,
+            Permissions.LeaveView, Permissions.LeaveApprove,
+            Permissions.CalendarView,
+            Permissions.LoansView, Permissions.LoansApprove,
             Permissions.ReportsRun, Permissions.ReportsExport
         };
 
         var viewer = new[]
         {
             Permissions.EmployeesView, Permissions.ProjectsView, Permissions.PayrollView,
-            Permissions.StatutoryView, Permissions.CompanyView, Permissions.ReportsRun
+            Permissions.StatutoryView, Permissions.CompanyView, Permissions.ReportsRun,
+            Permissions.TimeView, Permissions.LeaveView, Permissions.CalendarView,
+            Permissions.LoansView
         };
 
         AddRole(RoleNames.Administrator,

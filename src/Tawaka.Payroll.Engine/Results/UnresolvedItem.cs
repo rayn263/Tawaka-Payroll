@@ -41,6 +41,14 @@ public static class UnresolvedCodes
     public const string EarningTreatmentUnverified = "EARNING_TREATMENT_UNVERIFIED";
     public const string ContractUnresolved = "CONTRACT_UNRESOLVED";
     public const string RateMissing = "CONTRACT_RATE_MISSING";
+    public const string OvertimeRuleUnresolved = "OVERTIME_RULE_UNRESOLVED";
+    public const string OvertimeMultiplierUnresolved = "OVERTIME_MULTIPLIER_UNRESOLVED";
+    public const string TimesheetMissing = "TIMESHEET_MISSING";
+    public const string TimesheetNotApproved = "TIMESHEET_NOT_APPROVED";
+    public const string LeaveEntitlementUnresolved = "LEAVE_ENTITLEMENT_UNRESOLVED";
+
+    /// <summary>Casual engagement approaching or past the Labour Act s.12(3) threshold.</summary>
+    public const string CasualEngagementThreshold = "CASUAL_ENGAGEMENT_THRESHOLD";
 }
 
 /// <summary>A non-blocking observation about a calculation.</summary>

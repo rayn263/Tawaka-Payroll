@@ -1,0 +1,224 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/calendar"
+@using Tawaka.Application.Calendars
+@using Tawaka.Domain.Calendars
+@inject PayrollDbContext Db
+@inject HolidayCalendarService Calendars
+@inject UserSession Session
+
+@* The working calendar. Nothing here is shipped: Zimbabwe's public holidays are set by Act and by
+   proclamation and move from year to year, so each one is captured with its source (ADR-033). *@
+
+<div class="page-header">
+    <div>
+        <h1>Holiday calendar</h1>
+        <div class="subtitle">
+            Public and company holidays, dated and sourced. Payroll records the calendar it used.
+        </div>
+    </div>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+<div class="alert alert-info">
+    <strong>No public holiday is shipped with this system.</strong>
+    Zimbabwe's holidays come from the Public Holidays and Prohibition of Business Act and from
+    presidential proclamation, and the proclaimed dates change from year to year. A built-in list
+    would be silently wrong within a year and payroll would price a day that was not a holiday.
+    Capture each one here with the document it comes from.
+</div>
+
+@foreach (var calendar in _calendars)
+{
+    <div class="card">
+        <div class="page-header">
+            <div>
+                <h2>@calendar.Name</h2>
+                <div class="subtitle">
+                    @calendar.Code · from @calendar.EffectiveFrom.ToString("dd MMM yyyy")
+                    @(calendar.EffectiveTo is { } to ? $"to {to:dd MMM yyyy}" : "onwards")
+                </div>
+            </div>
+            @if (calendar.IsDefault)
+            {
+                <StatusBadge Label="DEFAULT" Tone="verified" />
+            }
+        </div>
+
+        @if (calendar.Holidays.Count == 0)
+        {
+            <EmptyState Title="No holidays captured"
+                        Description="Add each public holiday with its proclamation or Act." />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>Date</th><th>Name</th><th>Kind</th><th>Evidence</th><th>Source</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var holiday in calendar.Holidays.Where(h => h.IsActive).OrderBy(h => h.Date))
+                {
+                    <tr>
+                        <td>@holiday.Date.ToString("ddd dd MMM yyyy")</td>
+                        <td class="strong">@holiday.Name</td>
+                        <td>@holiday.Kind</td>
+                        <td>
+                            @if (holiday.RequiresVerification)
+                            {
+                                <StatusBadge Verification="holiday.VerificationStatus" />
+                            }
+                            else
+                            {
+                                <span class="muted" title="A company holiday is established by the company deciding it">n/a</span>
+                            }
+                        </td>
+                        <td class="muted">@(holiday.Source ?? "—")</td>
+                        <td>
+                            @if (Session.HasPermission(Permissions.StatutoryVerifyRules) &&
+                                 holiday.RequiresVerification &&
+                                 holiday.VerificationStatus != VerificationStatus.Verified)
+                            {
+                                <button class="btn btn-secondary"
+                                        @onclick="() => OpenVerify(holiday)">Verify</button>
+                            }
+                            @if (Session.HasPermission(Permissions.CalendarEdit))
+                            {
+                                <button class="btn btn-quiet"
+                                        @onclick="() => RemoveAsync(holiday.Id)">Remove</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+
+        @if (Session.HasPermission(Permissions.CalendarEdit))
+        {
+            <div class="form-grid">
+                <div><label>Date *</label><input type="date" @bind="_date" /></div>
+                <div><label>Name *</label><input @bind="_name" placeholder="Independence Day" /></div>
+                <div>
+                    <label>Kind *</label>
+                    <select @bind="_kind">
+                        @foreach (var kind in Enum.GetValues<HolidayKind>())
+                        {
+                            <option value="@kind">@kind</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Source</label>
+                    <input @bind="_source" placeholder="Proclamation, Act or company decision" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="() => AddAsync(calendar.Id)">Add holiday</button>
+            </div>
+        }
+    </div>
+}
+
+@if (_verifying is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _verifying = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h2>Verify a public holiday</h2>
+                <div class="subtitle">@_verifying.Name, @_verifying.Date.ToString("dd MMM yyyy")</div>
+            </div>
+            <button class="btn btn-quiet" @onclick="() => _verifying = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div>
+                    <label>Source *</label>
+                    <input @bind="_verifySource"
+                           placeholder="Public Holidays and Prohibition of Business Act, s.2" />
+                </div>
+            </div>
+            <p class="muted small">
+                Verifying a holiday is the same act as verifying a tax rule: it records that a
+                person read the document and found this date in it.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="VerifyAsync">Record verification</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<HolidayCalendar> _calendars = new();
+    private PublicHoliday? _verifying;
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private DateTime _date = DateTime.Today;
+    private string _name = string.Empty;
+    private HolidayKind _kind = HolidayKind.PublicHoliday;
+    private string _source = string.Empty;
+    private string _verifySource = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Db.ChangeTracker.Clear();
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _calendars = await Calendars.GetCalendarsAsync(_companyId);
+    }
+
+    private void OpenVerify(PublicHoliday holiday)
+    {
+        _verifying = holiday;
+        _verifySource = holiday.Source ?? string.Empty;
+    }
+
+    private async Task AddAsync(Guid calendarId)
+    {
+        var result = await Calendars.AddHolidayAsync(calendarId, new HolidayCommand
+        {
+            Date = DateOnly.FromDateTime(_date),
+            Name = _name,
+            Kind = _kind,
+            Source = string.IsNullOrWhiteSpace(_source) ? null : _source
+        });
+
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _name = string.Empty;
+            _source = string.Empty;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task VerifyAsync()
+    {
+        if (_verifying is null)
+        {
+            return;
+        }
+
+        var result = await Calendars.VerifyHolidayAsync(_verifying.Id, _verifySource);
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _verifying = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task RemoveAsync(Guid holidayId)
+    {
+        // Deactivated, not deleted: a payroll run may have priced a day against it.
+        var result = await Calendars.RemoveHolidayAsync(holidayId);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+}

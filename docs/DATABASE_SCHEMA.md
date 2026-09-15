@@ -172,7 +172,7 @@ the run it came from.
 
 ---
 
-## 9. Time, leave, loans and advances *(Phase 2)*
+## 9. Time, leave, loans and advances *(built — Milestone 5)*
 
 | Table | Key columns |
 |---|---|
@@ -187,6 +187,31 @@ the run it came from.
 | **LoanSchedules** | `Id`, `LoanId`, `InstalmentNumber`, `DuePeriodId`, `ScheduledAmount`, `PrincipalPortion`, `InterestPortion`, `Status`, `ActualDeductedAmount`, `PayrollRunEmployeeId` |
 | **LoanTransactions** | `Id`, `LoanId`, `Date`, `Type` (`Disbursement`/`Deduction`/`ManualRepayment`/`Adjustment`/`WriteOff`), `Amount/Currency`, `BalanceAfter`, `PayrollRunEmployeeId`, `RecordedBy/At` |
 | **Advances** | `Id`, `EmployeeId`, `AdvanceNumber`, `Amount/Currency`, `DateIssued`, `RecoveryPeriodId`, `RecoveredAmount`, `BalanceAmount`, `Status`, `ApprovedBy/At`, `PaymentMethodId`, `Reference` |
+
+---
+
+### 9a. As built at Milestone 5
+
+Migration `TimeLeaveCalendarAndLoans`, 16 tables:
+
+| Table | Notes |
+|---|---|
+| **Timesheets** | One per employee per period, carrying the input lifecycle (`ApprovalStatus`, submitted/approved actor and timestamp, `DecisionReason`) plus `ConsumedByPayrollRunId` and `CorrectsTimesheetId`. `ILockable`: once consumed it is Locked and the interceptor refuses writes |
+| **TimeEntries** | One row per date, unique on (`TimesheetId`,`WorkDate`). Hours and days stored as scaled integers; project and site names snapshotted so a later rename cannot rewrite approved time |
+| **TimeEntryOvertimeLines** | Hours per overtime category per day, unique on (`TimeEntryId`,`OvertimeCategoryCode`). A code, never a multiplier |
+| **LeaveTypes** | `EntitlementDays` and `StatutoryEntitlementDays` are **nullable** — undetermined is not zero (ADR-032) — with their own verification status, source and compliance question |
+| **LeaveEntitlements** | Per employee, leave type and leave year. Holds the granted days only; every movement is a transaction |
+| **LeaveTransactions** | Append-only ledger: opening balance, accrual, taken, adjustment, forfeiture, encashment, reversal. The balance is derived from this, never stored |
+| **LeaveRequests** | Dates, days, the calendar used, and `IsPaid` **frozen at request time** so reclassifying the type later cannot reprice leave already taken |
+| **HolidayCalendars** | Company calendars with effective dates and one default at a time |
+| **PublicHolidays** | Date, name, kind, `ActualDate` for an observed shift, and a verification status with a source — a public holiday is a claim about the law and is graded like one (ADR-033) |
+| **EmployeeLoans** | Principal, interest, instalment terms, disbursement, the input lifecycle, and `AllowsOverRecovery` with its approver and reason. **No balance column** (ADR-034) |
+| **LoanInstalments** | The schedule, tied to a payroll period where one is matched, with the run that recovered it |
+| **LoanTransactions** | Append-only: disbursement, repayments, settlement, adjustment, write-off, reversal, each with reference and reversal metadata |
+| **OvertimeRules** | TPT subtype of `StatutoryRules`. Category code, name, **nullable** multiplier, threshold hours, and the NSSA/tax treatment from spec §14 |
+| **PayDivisorRules** | TPT subtype. Working days and ordinary hours per period, both nullable, for converting a salary to a daily or hourly rate (Q33) |
+| **PayrollInputSnapshots** | The serialised snapshot each calculation ran on, with a SHA-256 hash and a seal timestamp. Unique on `PayrollRunEmployeeId` (ADR-035) |
+| **PayrollRunInputSources** | Which approved inputs a run consumed, relationally, so "which runs used this timesheet?" is a query rather than a scan of every stored snapshot |
 
 ---
 

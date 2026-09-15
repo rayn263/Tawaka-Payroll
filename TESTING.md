@@ -12,7 +12,7 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **529 passing, 3 skipped, 0 failing.**
+Current result: **608 passing, 1 skipped, 0 failing.**
 
 ## The two kinds of test
 
@@ -46,6 +46,12 @@ They are the majority of the suite and the ones that protect the design.
 | `PayslipBuilder` | The payslip renders persisted rows only; its totals reconcile to the stored run-employee totals; a legitimate zero renders `0.00` and an unresolved figure renders `—`; configured statutory categories appear even at zero; a USD and a ZiG payslip each carry their own currency throughout; a development-mode copy is watermarked and cannot be issued; re-issuing after a correction creates a new revision and supersedes the previous one without destroying it |
 | `PayrollReportService` | Every report groups by currency and no total spans currencies; the summary reconciles to the register; gross plus employer contributions equals total employer cost; the statutory report reconciles to the obligation register; project allocations sum to the total |
 | Workflow | Review → Approve → Finalise → Paid → Locked, each permissioned; the calculator cannot approve; a run cannot be finalised before approval; a correction run leaves the original run's figures and obligations untouched; a statutory payment is still possible after the run is locked |
+| `TimesheetService` | A timesheet moves Draft → Submitted → Approved; the submitter cannot approve it; a day outside the period, a duplicate date, more than 24 hours on one day and a second live timesheet for the same period are all refused; the first and last day of the period are accepted; an approved timesheet is not editable; returning one needs a reason and makes it editable again; a correction supersedes the original without touching it |
+| `LeaveService` | An unestablished entitlement leaves the balance undetermined, never zero; overlapping leave is refused and abutting leave is not; a rejected request does not block a later one; the submitter cannot approve; withdrawing an approval reverses the days and keeps both rows; adjustments are ledger rows with a reason; reclassifying a leave type does not reprice leave already taken |
+| `HolidayCalendarService` | No holiday is seeded; a captured public holiday starts Unverified and a company one does not; verifying needs a source; a duplicate date and a date outside the calendar's period are refused; removing deactivates rather than deletes |
+| `LoanService` | Instalments sum exactly to what is repayable, with rounding absorbed by the last one; the balance reconciles to the ledger after every movement; a deduction is capped at the outstanding balance; over-recovery needs a named approval with a reason; early settlement cancels the remaining schedule; a reversal restores the balance, keeps both rows and cannot be applied twice; the raiser cannot approve |
+| `TimeAndAbsenceCalculator` | Approved hours drive an hourly employee's basic pay; no approved time leaves it unresolved rather than zero; each overtime category is priced by its own rule and categories are never merged; a category with no rule refuses instead of paying plain time; overtime for a salaried employee without a divisor rule refuses with Q33; unpaid leave is docked at the daily rate and paid leave produces no line |
+| `PayrollSnapshotStore` | The snapshot is stored, hashed and sealed at calculation; it round-trips with its figures and currency intact; a tampered row is refused; serialisation is deterministic; approved inputs are queryable in both directions; a later loan repayment or timesheet correction does not change what a completed run recorded |
 | `PayrollRunService` | Historical reproducibility — a later salary increase and a future tax table both leave a calculated September untouched; an approved run cannot be silently recalculated; a locked run is immutable; a development run cannot be approved; a run with unresolved figures cannot be approved; the calculator cannot approve their own run |
 
 ### Statutory seed tests — against clearly labelled temporary rules
@@ -93,13 +99,14 @@ them. Earnings are now rounded to currency precision on entry.
 `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §24 in one place, so the whole compliance surface appears
 in every test run.
 
-**Implemented (31 of 34).** Milestone 3 activated most of the catalogue against the real engine;
-Milestone 4 activated TC-28, TC-29 and TC-29b against the statutory obligation register.
-`ComplianceTestCatalogue.cs` lists where each case now lives.
+**Implemented (33 of 34).** Milestone 3 activated most of the catalogue against the real engine;
+Milestone 4 activated TC-28, TC-29 and TC-29b against the statutory obligation register; Milestone 5
+activated TC-20 (advance recovered post-tax) and TC-33 (the casual six-week engagement warning) now
+that loans and timesheets exist. `ComplianceTestCatalogue.cs` lists where each case now lives.
 
-**Still skipped (3):** TC-18 (part-time ceiling treatment, pending Q4a/Q22), TC-20 (advance
-recovery) and TC-33 (casual six-week warning) need modules not yet built. They stay in the file so
-the outstanding work is counted every time the suite runs.
+**Still skipped (1):** TC-18, part-time NSSA ceiling treatment, which depends on compliance
+questions Q4a and Q22. It stays in the file so the outstanding work is counted every time the suite
+runs.
 
 ## Running a payroll by hand
 
@@ -109,9 +116,12 @@ dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules
 ```
 
-`--payroll` creates two employees — one on USD 850, one on ZiG 15,000 — a September 2026 period,
-and calculates them through the engine, then prints the preview, one full calculation explanation
-and an approval attempt. It signs in as a payroll officer to calculate and as a manager to approve,
+`--payroll` creates two employees — one on USD 850, one on ZiG 15,000 — a September 2026 period and
+a set of payroll inputs: a full month's timesheet with four hours of overtime, two days of unpaid
+leave and a USD 600 loan over six instalments. The officer captures all three, the manager approves
+them and the administrator disburses the loan, so segregation of duties is exercised across three
+identities rather than described. It then prints the approved inputs the run consumed, the preview,
+one full calculation explanation and an approval attempt. It signs in as a payroll officer to calculate and as a manager to approve,
 so segregation of duties is exercised rather than described. Without `--verify-rules` the approval
 is refused and the run stops there, which is the live payroll gate doing its job: a development
 calculation can never produce a statutory liability that looks settled.

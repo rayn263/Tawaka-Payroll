@@ -39,7 +39,20 @@ public enum StatutoryRuleType
     EmployerLevy = 5,
     TaxCredit = 6,
     TaxExemption = 7,
-    CurrencyTaxStrategy = 8
+    CurrencyTaxStrategy = 8,
+
+    /// <summary>
+    /// Overtime multipliers. Statutory because they come from the Labour Act and from NEC
+    /// collective bargaining agreements, which are Statutory Instruments (Milestone 5).
+    /// </summary>
+    Overtime = 9,
+
+    /// <summary>
+    /// How a periodic salary converts to an hourly or daily rate. Needed to price overtime and to
+    /// dock unpaid leave for a salaried employee, and not something the engine may assume
+    /// (Milestone 5).
+    /// </summary>
+    PayDivisor = 10
 }
 
 /// <summary>
@@ -66,7 +79,13 @@ public enum CalculationMethod
     PercentageOfBase = 2,
     CappedPercentage = 3,
     FlatAmount = 4,
-    Strategy = 5
+    Strategy = 5,
+
+    /// <summary>A multiple of an ordinary rate, such as an overtime rate (Milestone 5).</summary>
+    Multiplier = 6,
+
+    /// <summary>A divisor converting a periodic salary into a daily or hourly rate (Milestone 5).</summary>
+    Divisor = 7
 }
 
 /// <summary>

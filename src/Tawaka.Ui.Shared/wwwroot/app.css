@@ -488,3 +488,17 @@ tr.unresolved-row td { background: var(--unverified-bg); }
     .scroll-x table { min-width: 0; }
     table.data { font-size: 10px; }
 }
+
+/* ---- Payroll inputs (Milestone 5) ----------------------------------------- */
+
+tr.holiday-row td { background: var(--supported-bg); }
+tr.reversed-row td { opacity: .6; text-decoration: line-through; }
+tr.selected td { background: var(--brand-soft); }
+
+/* Timesheet capture is a grid of small numeric fields; full-width inputs would
+   make one day's row wider than the screen. */
+table.data input[type="number"] { width: 84px; text-align: right; }
+table.data select { min-width: 120px; }
+
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+     color: var(--ink-muted); margin: 18px 0 8px; }

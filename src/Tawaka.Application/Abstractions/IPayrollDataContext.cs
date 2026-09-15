@@ -1,14 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Domain.Audit;
+using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Companies;
 using Tawaka.Domain.Currencies;
 using Tawaka.Domain.Earnings;
 using Tawaka.Domain.Employees;
+using Tawaka.Domain.Leave;
+using Tawaka.Domain.Loans;
 using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Statutory;
 using Tawaka.Domain.Statutory.Obligations;
+using Tawaka.Domain.Time;
 
 namespace Tawaka.Application.Abstractions;
 
@@ -73,6 +77,25 @@ public interface IPayrollDataContext
     DbSet<StatutoryObligationLine> StatutoryObligationLines { get; }
     DbSet<StatutoryPayment> StatutoryPayments { get; }
     DbSet<Payslip> Payslips { get; }
+    DbSet<PayrollInputSnapshotRecord> PayrollInputSnapshots { get; }
+    DbSet<PayrollRunInputSource> PayrollRunInputSources { get; }
+
+    DbSet<Timesheet> Timesheets { get; }
+    DbSet<TimeEntry> TimeEntries { get; }
+    DbSet<TimeEntryOvertimeLine> TimeEntryOvertimeLines { get; }
+
+    DbSet<LeaveType> LeaveTypes { get; }
+    DbSet<LeaveEntitlement> LeaveEntitlements { get; }
+    DbSet<LeaveTransaction> LeaveTransactions { get; }
+    DbSet<LeaveRequest> LeaveRequests { get; }
+
+    DbSet<HolidayCalendar> HolidayCalendars { get; }
+    DbSet<PublicHoliday> PublicHolidays { get; }
+
+    DbSet<EmployeeLoan> EmployeeLoans { get; }
+    DbSet<LoanInstalment> LoanInstalments { get; }
+    DbSet<LoanTransaction> LoanTransactions { get; }
+
     DbSet<AppSetting> AppSettings { get; }
     DbSet<AuditLog> AuditLogs { get; }
 

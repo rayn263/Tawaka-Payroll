@@ -30,6 +30,8 @@ public sealed class EfStatutoryRuleSource : IStatutoryRuleSource
         StatutoryRuleType.TaxExemption => _context.TaxExemptionRules.AsNoTracking().ToList(),
         StatutoryRuleType.CurrencyTaxStrategy =>
             _context.CurrencyTaxStrategyRules.AsNoTracking().ToList(),
+        StatutoryRuleType.Overtime => _context.OvertimeRules.AsNoTracking().ToList(),
+        StatutoryRuleType.PayDivisor => _context.PayDivisorRules.AsNoTracking().ToList(),
         _ => Array.Empty<StatutoryRule>()
     };
 }

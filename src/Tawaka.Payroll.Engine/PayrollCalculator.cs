@@ -32,6 +32,7 @@ public sealed class PayrollCalculator
         var context = new CalculationContext(snapshot);
 
         // The ordered pipeline. Each stage appends to the trace and may record an unresolved item.
+        DeriveApprovedInputs(context);
         GatherEarnings(context);
         ApplyExemptions(context);
         ComputeGross(context);
@@ -50,6 +51,63 @@ public sealed class PayrollCalculator
     }
 
     // ---- Stages ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Turns approved time, absence and loan inputs into earnings and deductions before anything
+    /// else runs, so the rest of the pipeline sees one uniform set of lines and does not need to
+    /// know where any of them came from.
+    /// </summary>
+    private static void DeriveApprovedInputs(CalculationContext context)
+    {
+        var derived = new List<Inputs.EarningInput>();
+        derived.AddRange(TimeAndAbsenceCalculator.DeriveTimeBasedPay(
+            context.Snapshot, context.Unresolve, context.Trace));
+        derived.AddRange(TimeAndAbsenceCalculator.DeriveOvertime(
+            context.Snapshot, context.Unresolve, context.Trace));
+
+        var derivedDeductions = new List<Inputs.DeductionInput>();
+        derivedDeductions.AddRange(TimeAndAbsenceCalculator.DeriveUnpaidLeave(
+            context.Snapshot, context.Unresolve, context.Trace));
+        derivedDeductions.AddRange(TimeAndAbsenceCalculator.DeriveLoanDeductions(
+            context.Snapshot, context.Trace));
+
+        context.AddDerivedInputs(derived, derivedDeductions);
+        WarnOnCasualEngagement(context);
+    }
+
+    /// <summary>
+    /// Warns when a casual worker's engagement approaches or passes the point at which the Labour
+    /// Act deems them permanent.
+    /// <para>
+    /// It warns and does nothing else. It does not change the employment type, start leave
+    /// accrual or alter NSSA treatment: the legal deeming happens whether the software notices or
+    /// not, and a silent reclassification would be this system making a legal determination it has
+    /// no standing to make. Suppressing the warning would leave a real liability invisible, which
+    /// is why it is not optional either (spec §11).
+    /// </para>
+    /// </summary>
+    private static void WarnOnCasualEngagement(CalculationContext context)
+    {
+        if (context.Snapshot.CasualEngagement is not { IsApproaching: true } engagement)
+        {
+            return;
+        }
+
+        var message = engagement.HasPassed
+            ? $"Casual engagement threshold PASSED — {engagement.Describe()} of engagement in the " +
+              $"four months to {engagement.WindowEnd:dd MMM yyyy}. Labour Act s.12(3) deems this " +
+              "employee to be on a contract without limit of time. This has contractual, leave and " +
+              "NSSA consequences. Seek advice and update the employment record. The system has " +
+              "not changed anything."
+            : $"Casual engagement threshold approaching — {engagement.Describe()} of engagement in " +
+              $"the four months to {engagement.WindowEnd:dd MMM yyyy}. At " +
+              $"{engagement.DeemedAtDays} days, Labour Act s.12(3) deems the employee to be on a " +
+              "contract without limit of time. Seek advice and update the employment record if " +
+              "appropriate.";
+
+        context.Warn(new CalculationWarning(
+            UnresolvedCodes.CasualEngagementThreshold, context.Snapshot.EmploymentTypeCode, message));
+    }
 
     private static void GatherEarnings(CalculationContext context)
     {
@@ -153,6 +211,18 @@ public sealed class PayrollCalculator
 
     private static void ComputeGross(CalculationContext context)
     {
+        // Where a component of pay could not be produced, the gross is not known. Totalling only
+        // the parts that worked would report a figure that looks complete and is not.
+        if (context.HasUnresolvedEarnings)
+        {
+            context.GrossEarnings = null;
+            context.Trace(new TraceEntryBuilder("ComputeGross", "Gross earnings")
+                .Explain("Not determined: one or more components of pay could not be calculated. " +
+                         "The unresolved items name each one. This is an absent figure, not zero.")
+                .Build());
+            return;
+        }
+
         var gross = Money.Sum(context.Currency,
             context.Earnings.Where(l => l.Input.IsIncludedInGross &&
                                         l.Input.Amount.Currency == context.Currency)

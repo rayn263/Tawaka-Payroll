@@ -2,8 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tawaka.Application.Employees;
 using Tawaka.Application.Payroll;
+using Tawaka.Application.Leave;
+using Tawaka.Application.Loans;
 using Tawaka.Application.Security;
 using Tawaka.Application.Statutory.Obligations;
+using Tawaka.Application.Time;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Employees;
 using Tawaka.Domain.Payroll;
@@ -22,6 +25,7 @@ public static class PayrollDemo
 {
     private const string OfficerPassword = "Officer2026Site";
     private const string ManagerPassword = "Manager2026Site";
+    private const string AdministratorPassword = "Admin2026Site";
 
     public static async Task RunAsync(IServiceProvider provider, bool verifyRules)
     {
@@ -39,6 +43,8 @@ public static class PayrollDemo
         // segregation of duties actually plays out.
         await EnsureUserAsync(db, hasher, "tncube", "Tapiwa Ncube", RoleNames.PayrollOfficer, OfficerPassword);
         await EnsureUserAsync(db, hasher, "rmoyo", "Rudo Moyo", RoleNames.Manager, ManagerPassword);
+        await EnsureUserAsync(db, hasher, "achirwa", "Anesu Chirwa", RoleNames.Administrator,
+            AdministratorPassword);
         await SignInAsync(auth, session, "tncube", OfficerPassword);
 
         var company = await db.Companies.FirstAsync();
@@ -84,8 +90,12 @@ public static class PayrollDemo
             await db.SaveChangesAsync();
         }
 
+        // Milestone 5: approved inputs before the calculation reads them.
+        await PrepareInputsAsync(scope.ServiceProvider, db, auth, session, company.Id, moyo, period);
+
         var run = (await runs.CreateRunAsync(period.Id)).Value!;
         await runs.CalculateAsync(run.Id);
+        await PrintInputSourcesAsync(scope.ServiceProvider, run.Id);
 
         await PrintPreviewAsync(db, run.Id);
         await PrintExplanationAsync(db, run.Id, moyo);
@@ -241,6 +251,152 @@ public static class PayrollDemo
                 $"{group.Sum(o => o.Outstanding.Amount),14:N2}");
             Console.WriteLine();
         }
+    }
+
+    /// <summary>
+    /// Captures and approves a timesheet, a period of unpaid leave and a loan, so the run has real
+    /// inputs to consume. The officer captures and the manager approves: a single person doing both
+    /// is exactly what segregation of duties exists to prevent, and the services refuse it.
+    /// </summary>
+    private static async Task PrepareInputsAsync(
+        IServiceProvider services, PayrollDbContext db, AuthenticationService auth,
+        UserSession session, Guid companyId, Guid employeeId, PayrollPeriod period)
+    {
+        var timesheets = services.GetRequiredService<TimesheetService>();
+        var leave = services.GetRequiredService<LeaveService>();
+        var loans = services.GetRequiredService<LoanService>();
+
+        if (await db.Timesheets.AnyAsync(t => t.PayrollPeriodId == period.Id))
+        {
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("PAYROLL INPUTS — capture and approval");
+        Console.WriteLine(new string('-', 112));
+
+        var sheet = (await timesheets.CreateAsync(employeeId, period.Id)).Value!;
+
+        var entries = new List<TimeEntryRequest>();
+        for (var date = period.StartDate; date <= period.EndDate; date = date.AddDays(1))
+        {
+            if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
+                continue;
+            }
+
+            entries.Add(new TimeEntryRequest
+            {
+                WorkDate = date,
+                OrdinaryHours = 8m,
+                DaysWorked = 1m,
+
+                // Four hours of weekday overtime in the first week, to show it priced by its rule.
+                Overtime = date.Day <= 4
+                    ? new Dictionary<string, decimal> { ["OT_WEEKDAY"] = 1m }
+                    : new Dictionary<string, decimal>()
+            });
+        }
+
+        await timesheets.SetEntriesAsync(sheet.Id, entries);
+        await timesheets.SubmitAsync(sheet.Id);
+        Console.WriteLine($"  Timesheet submitted: {entries.Count} days, " +
+                          $"{entries.Sum(e => e.Overtime.Values.Sum()):N2} overtime hours.");
+
+        var unpaidType = await db.LeaveTypes.AsNoTracking().FirstAsync(l => l.Code == "UNPAID");
+        var request = (await leave.RequestAsync(new LeaveRequestCommand
+        {
+            EmployeeId = employeeId,
+            LeaveTypeId = unpaidType.Id,
+            StartDate = period.StartDate.AddDays(20),
+            EndDate = period.StartDate.AddDays(21),
+            Reason = "Family matter"
+        })).Value;
+
+        if (request is not null)
+        {
+            await leave.SubmitAsync(request.Id);
+            Console.WriteLine($"  Unpaid leave submitted: {request.Days:N2} day(s).");
+        }
+
+        var loan = (await loans.CreateAsync(new LoanCommand
+        {
+            EmployeeId = employeeId,
+            CurrencyCode = "USD",
+            PrincipalAmount = 600m,
+            InstalmentCount = 6,
+            FirstInstalmentDate = period.PayDate,
+            Purpose = "School fees"
+        })).Value!;
+        await loans.SubmitAsync(loan.Id);
+        Console.WriteLine($"  Loan submitted: {loan.LoanNumber}, USD {loan.PrincipalAmount:N2} " +
+                          $"over {loan.InstalmentCount} instalments.");
+
+        // The manager approves. The officer who captured all of this cannot.
+        await SignInAsync(auth, session, "rmoyo", ManagerPassword);
+
+        var refused = await timesheets.ApproveAsync(sheet.Id);
+        Console.WriteLine(refused.IsValid
+            ? "  Timesheet approved."
+            : $"  (Manager approving) {string.Join("; ", refused.Errors.Select(e => e.Message))}");
+
+        if (request is not null)
+        {
+            await leave.ApproveAsync(request.Id);
+        }
+
+        await loans.ApproveAsync(loan.Id);
+        Console.WriteLine("  Leave and loan approved by the manager.");
+
+        // Disbursement is a third pair of hands again: it is money leaving the business, so it
+        // sits with the administrator rather than with either the captor or the approver.
+        await SignInAsync(auth, session, "achirwa", AdministratorPassword);
+        await loans.DisburseAsync(loan.Id, period.StartDate, "FBC-RTGS-77012");
+        Console.WriteLine("  Loan disbursed. The first instalment is now recoverable.");
+
+        await SignInAsync(auth, session, "tncube", OfficerPassword);
+
+        db.ChangeTracker.Clear();
+    }
+
+    /// <summary>
+    /// Prints exactly which approved records the run consumed — the question the stored snapshot
+    /// and the input-source rows exist to answer.
+    /// </summary>
+    private static async Task PrintInputSourcesAsync(IServiceProvider services, Guid runId)
+    {
+        var store = services.GetRequiredService<PayrollSnapshotStore>();
+        var sources = await store.GetInputSourcesAsync(runId);
+
+        Console.WriteLine();
+        Console.WriteLine("APPROVED INPUTS CONSUMED BY THIS RUN");
+        Console.WriteLine(new string('-', 112));
+
+        if (sources.Count == 0)
+        {
+            Console.WriteLine("  None.");
+            return;
+        }
+
+        // One row is written per employee, so an input shared across the run — the calendar —
+        // appears once per employee. Grouped here for readability; the rows themselves stay
+        // per-employee, which is what makes "who consumed this" answerable.
+        foreach (var group in sources
+                     .GroupBy(s => new { s.InputType, s.InputId })
+                     .OrderBy(g => g.Key.InputType))
+        {
+            var source = group.First();
+            var approver = source.ApprovedBy is null
+                ? "no approver recorded"
+                : $"approved {source.ApprovedAt:dd MMM yyyy HH:mm}";
+            var employees = group.Count() == 1 ? "1 employee" : $"{group.Count()} employees";
+            Console.WriteLine(
+                $"  {source.InputType,-16}{source.Description} ({approver}, {employees})");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  The snapshot these came from is stored and hashed, so this run still");
+        Console.WriteLine("  reproduces against the inputs it actually had, however they move later.");
     }
 
     private static async Task EnsureUserAsync(

@@ -1,0 +1,482 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/loans"
+@using Tawaka.Application.Loans
+@using Tawaka.Domain.Loans
+@inject PayrollDbContext Db
+@inject LoanService LoanService
+@inject UserSession Session
+
+@* Loans and advances. The outstanding balance shown here is derived from the transaction ledger,
+   never stored, so it cannot disagree with the movements that produced it (ADR-034). *@
+
+<div class="page-header">
+    <div>
+        <h1>Loans &amp; advances</h1>
+        <div class="subtitle">
+            Principal, schedule and balance, recovered through payroll. A deduction never takes more
+            than is owed unless somebody has approved that it may.
+        </div>
+    </div>
+    <a class="btn btn-quiet" href="approvals">Approval queue</a>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+@if (Session.HasPermission(Permissions.LoansEdit))
+{
+    <div class="card">
+        <h2>New loan or advance</h2>
+        <div class="form-grid">
+            <div>
+                <label>Employee *</label>
+                <select @bind="_employeeId">
+                    <option value="@Guid.Empty">Select…</option>
+                    @foreach (var employee in _employees)
+                    {
+                        <option value="@employee.Id">@employee.FullName</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Kind *</label>
+                <select @bind="_kind">
+                    @foreach (var kind in Enum.GetValues<LoanKind>())
+                    {
+                        <option value="@kind">@kind</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Currency *</label>
+                <select @bind="_currency">
+                    @foreach (var currency in _currencies)
+                    {
+                        <option value="@currency">@(currency == "ZWG" ? "ZiG" : currency)</option>
+                    }
+                </select>
+            </div>
+            <div><label>Principal *</label><input type="number" step="0.01" @bind="_principal" /></div>
+            <div><label>Instalments *</label><input type="number" @bind="_instalments" /></div>
+            <div><label>Interest amount</label><input type="number" step="0.01" @bind="_interest" /></div>
+            <div><label>First instalment</label><input type="date" @bind="_firstInstalment" /></div>
+            <div><label>Purpose</label><input @bind="_purpose" /></div>
+        </div>
+        <p class="muted small">
+            A loan is repaid in the currency it was taken in. A USD loan is never recovered from a
+            ZiG payroll: that would need a converted amount, and the conversion methodology is
+            compliance question Q1, still open.
+        </p>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="CreateAsync">Create</button>
+        </div>
+    </div>
+}
+
+@if (_loans.Count == 0)
+{
+    <div class="card"><EmptyState Title="No loans or advances yet" /></div>
+}
+else
+{
+    @foreach (var group in _loans.GroupBy(l => l.CurrencyCode).OrderBy(g => g.Key))
+    {
+        <div class="card">
+            <h2>@(group.Key == "ZWG" ? "ZiG" : group.Key) loans and advances</h2>
+            <div class="scroll-x">
+                <table class="data">
+                    <thead>
+                    <tr><th>Number</th><th>Employee</th><th>Kind</th><th class="num">Principal</th>
+                        <th class="num">Repaid</th><th class="num">Outstanding</th>
+                        <th class="num">Instalment</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var loan in group.OrderByDescending(l => l.CreatedAt))
+                    {
+                        <tr>
+                            <td class="mono">@loan.LoanNumber</td>
+                            <td class="strong">@EmployeeName(loan.EmployeeId)</td>
+                            <td>@loan.Kind</td>
+                            <td class="num">@loan.PrincipalAmount.ToString("N2")</td>
+                            <td class="num">@loan.TotalRepaid.Amount.ToString("N2")</td>
+                            <td class="num strong">@loan.Outstanding.Amount.ToString("N2")</td>
+                            <td class="num">@loan.InstalmentAmount.ToString("N2")</td>
+                            <td>
+                                <StatusBadge Label="@loan.Status.ToString()" Tone="@Tone(loan)" />
+                                @if (loan.AllowsOverRecovery)
+                                {
+                                    <span class="badge unverified"
+                                          title="@loan.OverRecoveryApprovalReason">over-recovery approved</span>
+                                }
+                            </td>
+                            <td>
+                                @if (loan.ApprovalStatus == InputApprovalStatus.Draft &&
+                                     Session.HasPermission(Permissions.LoansEdit))
+                                {
+                                    <button class="btn btn-secondary"
+                                            @onclick="() => SubmitAsync(loan.Id)">Submit</button>
+                                }
+                                else if (loan.ApprovalStatus == InputApprovalStatus.Approved &&
+                                         loan.Status == LoanStatus.Approved &&
+                                         Session.HasPermission(Permissions.LoansDisburse))
+                                {
+                                    <button class="btn btn-primary"
+                                            @onclick="() => OpenDisburse(loan)">Disburse</button>
+                                }
+                                else if (loan.Status == LoanStatus.Disbursed &&
+                                         Session.HasPermission(Permissions.LoansEdit))
+                                {
+                                    <button class="btn btn-secondary"
+                                            @onclick="() => OpenRepayment(loan)">Record repayment</button>
+                                }
+
+                                <button class="btn btn-quiet" @onclick="() => Select(loan)">Statement</button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                    <tr class="totals">
+                        <td colspan="5" class="strong">
+                            Total outstanding (@(group.Key == "ZWG" ? "ZiG" : group.Key))
+                        </td>
+                        <td class="num strong">@group.Sum(l => l.Outstanding.Amount).ToString("N2")</td>
+                        <td colspan="3"></td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@if (_selected is not null)
+{
+    <div class="card">
+        <div class="page-header">
+            <div>
+                <h2>@_selected.LoanNumber</h2>
+                <div class="subtitle">
+                    @EmployeeName(_selected.EmployeeId) ·
+                    outstanding @_selected.CurrencyCode @_selected.Outstanding.Amount.ToString("N2")
+                </div>
+            </div>
+            <button class="btn btn-quiet" @onclick="() => _selected = null">Close</button>
+        </div>
+
+        <h3>Schedule</h3>
+        <table class="data">
+            <thead>
+            <tr><th class="num">#</th><th>Due</th><th class="num">Amount</th>
+                <th class="num">Principal</th><th class="num">Interest</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var instalment in _selected.Instalments.OrderBy(i => i.InstalmentNumber))
+            {
+                <tr>
+                    <td class="num">@instalment.InstalmentNumber</td>
+                    <td>@instalment.DueDate.ToString("dd MMM yyyy")</td>
+                    <td class="num">@instalment.Amount.ToString("N2")</td>
+                    <td class="num">@instalment.PrincipalPortion.ToString("N2")</td>
+                    <td class="num">@instalment.InterestPortion.ToString("N2")</td>
+                    <td>@instalment.Status</td>
+                </tr>
+            }
+            </tbody>
+            <tfoot>
+            <tr class="totals">
+                <td colspan="2" class="strong">Total scheduled</td>
+                <td class="num strong">@_selected.Instalments.Sum(i => i.Amount).ToString("N2")</td>
+                <td colspan="3"></td>
+            </tr>
+            </tfoot>
+        </table>
+
+        <h3>Ledger</h3>
+        <table class="data">
+            <thead>
+            <tr><th>Date</th><th>Movement</th><th class="num">Amount</th><th>Reference</th><th></th></tr>
+            </thead>
+            <tbody>
+            @foreach (var transaction in _selected.Transactions.OrderBy(t => t.TransactionDate))
+            {
+                <tr class="@(transaction.IsReversed ? "reversed-row" : null)">
+                    <td>@transaction.TransactionDate.ToString("dd MMM yyyy")</td>
+                    <td>@transaction.TransactionType</td>
+                    <td class="num">@transaction.Amount.ToString("N2")</td>
+                    <td class="muted">@(transaction.Reference ?? "—")</td>
+                    <td>
+                        @if (transaction.IsReversed)
+                        {
+                            <span class="badge unverified" title="@transaction.ReversalReason">reversed</span>
+                        }
+                        else if (transaction.TransactionType != LoanTransactionType.Reversal &&
+                                 Session.HasPermission(Permissions.LoansEdit))
+                        {
+                            <button class="btn btn-quiet"
+                                    @onclick="() => OpenReversal(transaction)">Reverse</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted small">
+            The outstanding balance is the sum of this ledger, not a stored figure. A reversed row
+            stays visible with its reason: the employee is entitled to see both what was taken and
+            what was given back.
+        </p>
+    </div>
+}
+
+@if (_disbursing is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _disbursing = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Record disbursement</h2>
+            <button class="btn btn-quiet" @onclick="() => _disbursing = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Date *</label><input type="date" @bind="_disbursementDate" /></div>
+                <div><label>Reference *</label><input @bind="_reference" /></div>
+            </div>
+            <p class="muted small">
+                A reference is required: money left the business and must be evidenced. Nothing is
+                owed, and no payroll deduction arises, until this is recorded.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="DisburseAsync">Record</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_repaying is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _repaying = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h2>Record a repayment</h2>
+                <div class="subtitle">
+                    Outstanding @_repaying.CurrencyCode @_repaying.Outstanding.Amount.ToString("N2")
+                </div>
+            </div>
+            <button class="btn btn-quiet" @onclick="() => _repaying = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Amount *</label><input type="number" step="0.01" @bind="_repaymentAmount" /></div>
+                <div><label>Date *</label><input type="date" @bind="_repaymentDate" /></div>
+                <div><label>Reference *</label><input @bind="_reference" /></div>
+                <div>
+                    <label>Settles the loan</label>
+                    <input type="checkbox" @bind="_isSettlement" />
+                </div>
+            </div>
+            <p class="muted small">
+                A repayment above the outstanding balance is refused unless over-recovery has been
+                approved for this loan. An early settlement cancels the remaining schedule.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="RepayAsync">Record</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_reversing is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _reversing = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Reverse a movement</h2>
+            <button class="btn btn-quiet" @onclick="() => _reversing = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Reason *</label><input @bind="_reversalReason" /></div>
+            </div>
+            <p class="muted small">
+                The original row is kept with this reason against it, and a reversing row is added.
+                Nothing is deleted.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="ReverseAsync">Reverse</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<EmployeeLoan> _loans = new();
+    private List<Employee> _employees = new();
+    private List<string> _currencies = new();
+    private EmployeeLoan? _selected;
+    private EmployeeLoan? _disbursing;
+    private EmployeeLoan? _repaying;
+    private LoanTransaction? _reversing;
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private Guid _employeeId;
+    private LoanKind _kind = LoanKind.Loan;
+    private string _currency = "USD";
+    private decimal _principal;
+    private int _instalments = 6;
+    private decimal _interest;
+    private DateTime _firstInstalment = DateTime.Today;
+    private string _purpose = string.Empty;
+
+    private DateTime _disbursementDate = DateTime.Today;
+    private DateTime _repaymentDate = DateTime.Today;
+    private decimal _repaymentAmount;
+    private bool _isSettlement;
+    private string _reference = string.Empty;
+    private string _reversalReason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _employees = Db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == _companyId && e.Status == EmployeeStatus.Active)
+            .OrderBy(e => e.LastName).ToList();
+        _currencies = Db.CompanyCurrencies.AsNoTracking()
+            .Where(c => c.CompanyId == _companyId && c.IsEnabled)
+            .OrderBy(c => c.SortOrder)
+            .Select(c => c.CurrencyCode).ToList();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Db.ChangeTracker.Clear();
+        _loans = await LoanService.GetLoansAsync(_companyId);
+        if (_selected is not null)
+        {
+            _selected = _loans.FirstOrDefault(l => l.Id == _selected.Id);
+        }
+    }
+
+    private string EmployeeName(Guid employeeId) =>
+        _employees.FirstOrDefault(e => e.Id == employeeId)?.FullName ?? "Unknown";
+
+    private static string Tone(EmployeeLoan loan) => loan.Status switch
+    {
+        LoanStatus.Settled => "verified",
+        LoanStatus.Disbursed => "supported",
+        LoanStatus.Rejected or LoanStatus.WrittenOff => "unverified",
+        _ => "disabled"
+    };
+
+    private void Select(EmployeeLoan loan) => _selected = loan;
+
+    private void OpenDisburse(EmployeeLoan loan)
+    {
+        _disbursing = loan;
+        _reference = string.Empty;
+    }
+
+    private void OpenRepayment(EmployeeLoan loan)
+    {
+        _repaying = loan;
+        _repaymentAmount = loan.InstalmentAmount;
+        _reference = string.Empty;
+        _isSettlement = false;
+    }
+
+    private void OpenReversal(LoanTransaction transaction)
+    {
+        _reversing = transaction;
+        _reversalReason = string.Empty;
+    }
+
+    private async Task CreateAsync()
+    {
+        var result = await LoanService.CreateAsync(new LoanCommand
+        {
+            EmployeeId = _employeeId,
+            Kind = _kind,
+            CurrencyCode = _currency,
+            PrincipalAmount = _principal,
+            InstalmentCount = _instalments,
+            InterestAmount = _interest,
+            FirstInstalmentDate = DateOnly.FromDateTime(_firstInstalment),
+            Purpose = _purpose
+        });
+
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _principal = 0m;
+            _interest = 0m;
+            _purpose = string.Empty;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SubmitAsync(Guid loanId)
+    {
+        var result = await LoanService.SubmitAsync(loanId);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+
+    private async Task DisburseAsync()
+    {
+        if (_disbursing is null)
+        {
+            return;
+        }
+
+        var result = await LoanService.DisburseAsync(
+            _disbursing.Id, DateOnly.FromDateTime(_disbursementDate), _reference);
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _disbursing = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task RepayAsync()
+    {
+        if (_repaying is null)
+        {
+            return;
+        }
+
+        var result = await LoanService.RecordManualRepaymentAsync(
+            _repaying.Id, _repaymentAmount, DateOnly.FromDateTime(_repaymentDate),
+            _reference, _isSettlement);
+
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _repaying = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ReverseAsync()
+    {
+        if (_reversing is null)
+        {
+            return;
+        }
+
+        var result = await LoanService.ReverseAsync(_reversing.Id, _reversalReason);
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _reversing = null;
+        }
+
+        await LoadAsync();
+    }
+}

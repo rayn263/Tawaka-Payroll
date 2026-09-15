@@ -1,15 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Application.Abstractions;
 using Tawaka.Domain.Audit;
+using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Companies;
 using Tawaka.Domain.Currencies;
 using Tawaka.Domain.Earnings;
 using Tawaka.Domain.Employees;
+using Tawaka.Domain.Leave;
+using Tawaka.Domain.Loans;
 using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Domain.Statutory;
 using Tawaka.Domain.Statutory.Obligations;
+using Tawaka.Domain.Time;
 
 namespace Tawaka.Infrastructure.Persistence;
 
@@ -83,6 +87,41 @@ public class PayrollDbContext : DbContext, IPayrollDataContext
     public DbSet<StatutoryPayment> StatutoryPayments => Set<StatutoryPayment>();
 
     public DbSet<Payslip> Payslips => Set<Payslip>();
+
+    public DbSet<PayrollInputSnapshotRecord> PayrollInputSnapshots =>
+        Set<PayrollInputSnapshotRecord>();
+
+    public DbSet<PayrollRunInputSource> PayrollRunInputSources => Set<PayrollRunInputSource>();
+
+    // ---- Milestone 5: payroll inputs ------------------------------------------------------
+
+    public DbSet<Timesheet> Timesheets => Set<Timesheet>();
+
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+
+    public DbSet<TimeEntryOvertimeLine> TimeEntryOvertimeLines => Set<TimeEntryOvertimeLine>();
+
+    public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
+
+    public DbSet<LeaveEntitlement> LeaveEntitlements => Set<LeaveEntitlement>();
+
+    public DbSet<LeaveTransaction> LeaveTransactions => Set<LeaveTransaction>();
+
+    public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
+
+    public DbSet<HolidayCalendar> HolidayCalendars => Set<HolidayCalendar>();
+
+    public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
+
+    public DbSet<EmployeeLoan> EmployeeLoans => Set<EmployeeLoan>();
+
+    public DbSet<LoanInstalment> LoanInstalments => Set<LoanInstalment>();
+
+    public DbSet<LoanTransaction> LoanTransactions => Set<LoanTransaction>();
+
+    public DbSet<OvertimeRule> OvertimeRules => Set<OvertimeRule>();
+
+    public DbSet<PayDivisorRule> PayDivisorRules => Set<PayDivisorRule>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

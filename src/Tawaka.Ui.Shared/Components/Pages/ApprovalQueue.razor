@@ -1,0 +1,278 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/approvals"
+@using Tawaka.Application.Calendars
+@using Tawaka.Application.Leave
+@using Tawaka.Application.Loans
+@using Tawaka.Application.Time
+@using Tawaka.Domain.Leave
+@using Tawaka.Domain.Loans
+@using Tawaka.Domain.Time
+@inject PayrollDbContext Db
+@inject TimesheetService TimesheetService
+@inject LeaveService LeaveService
+@inject LoanService LoanService
+@inject UserSession Session
+
+@* Everything waiting on a decision, in one place. Payroll consumes approved inputs only, so this
+   queue is the gate between what people captured and what payroll will pay. *@
+
+<div class="page-header">
+    <div>
+        <h1>Approval queue</h1>
+        <div class="subtitle">
+            Timesheets, leave and loans awaiting a decision. Approving is what makes an input
+            visible to payroll.
+        </div>
+    </div>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+@if (_timesheets.Count == 0 && _leave.Count == 0 && _loans.Count == 0)
+{
+    <div class="card">
+        <EmptyState Title="Nothing waiting"
+                    Description="Submitted timesheets, leave requests and loans appear here." />
+    </div>
+}
+
+@if (_timesheets.Count > 0)
+{
+    <div class="card">
+        <h2>Timesheets (@_timesheets.Count)</h2>
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Employee</th><th>Period</th><th class="num">Days</th>
+                    <th class="num">Ordinary</th><th class="num">Overtime</th>
+                    <th>Submitted by</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var sheet in _timesheets)
+                {
+                    <tr>
+                        <td class="strong">@EmployeeName(sheet.EmployeeId)</td>
+                        <td>@sheet.PeriodStart.ToString("dd MMM") – @sheet.PeriodEnd.ToString("dd MMM yyyy")</td>
+                        <td class="num">@sheet.TotalDaysWorked.ToString("N2")</td>
+                        <td class="num">@sheet.TotalOrdinaryHours.ToString("N2")</td>
+                        <td class="num">@sheet.TotalOvertimeHours.ToString("N2")</td>
+                        <td class="muted">@(sheet.SubmittedBy ?? "—")</td>
+                        <td>
+                            @if (Session.HasPermission(Permissions.TimeApprove))
+                            {
+                                <button class="btn btn-primary"
+                                        @onclick="() => ApproveTimesheetAsync(sheet.Id)">Approve</button>
+                                <button class="btn btn-quiet"
+                                        @onclick="() => OpenDecision(DecisionKind.Timesheet, sheet.Id)">Return</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            The person who submitted a timesheet cannot approve it. That is the whole value of the
+            approval, and the system enforces it rather than trusting it.
+        </p>
+    </div>
+}
+
+@if (_leave.Count > 0)
+{
+    <div class="card">
+        <h2>Leave requests (@_leave.Count)</h2>
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th class="num">Days</th>
+                    <th>Paid</th><th>Submitted by</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var request in _leave)
+                {
+                    <tr>
+                        <td class="strong">@EmployeeName(request.EmployeeId)</td>
+                        <td>@request.LeaveType?.Name</td>
+                        <td>@request.StartDate.ToString("dd MMM yyyy")</td>
+                        <td>@request.EndDate.ToString("dd MMM yyyy")</td>
+                        <td class="num">@request.Days.ToString("N2")</td>
+                        <td>@(request.IsPaid ? "Paid" : "Unpaid")</td>
+                        <td class="muted">@(request.SubmittedBy ?? "—")</td>
+                        <td>
+                            @if (Session.HasPermission(Permissions.LeaveApprove))
+                            {
+                                <button class="btn btn-primary"
+                                        @onclick="() => ApproveLeaveAsync(request.Id)">Approve</button>
+                                <button class="btn btn-quiet"
+                                        @onclick="() => OpenDecision(DecisionKind.Leave, request.Id)">Return</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            Approving leave posts the days to the ledger. Withdrawing an approval reverses them,
+            and both movements stay on the record.
+        </p>
+    </div>
+}
+
+@if (_loans.Count > 0)
+{
+    <div class="card">
+        <h2>Loans and advances (@_loans.Count)</h2>
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Number</th><th>Employee</th><th>Kind</th><th>Currency</th>
+                    <th class="num">Principal</th><th class="num">Instalments</th>
+                    <th>Submitted by</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var loan in _loans)
+                {
+                    <tr>
+                        <td class="mono">@loan.LoanNumber</td>
+                        <td class="strong">@EmployeeName(loan.EmployeeId)</td>
+                        <td>@loan.Kind</td>
+                        <td>@(loan.CurrencyCode == "ZWG" ? "ZiG" : loan.CurrencyCode)</td>
+                        <td class="num">@loan.PrincipalAmount.ToString("N2")</td>
+                        <td class="num">@loan.InstalmentCount</td>
+                        <td class="muted">@(loan.SubmittedBy ?? "—")</td>
+                        <td>
+                            @if (Session.HasPermission(Permissions.LoansApprove))
+                            {
+                                <button class="btn btn-primary"
+                                        @onclick="() => ApproveLoanAsync(loan.Id)">Approve</button>
+                                <button class="btn btn-quiet"
+                                        @onclick="() => OpenDecision(DecisionKind.Loan, loan.Id)">Reject</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            Approving a loan does not disburse it. Nothing is owed, and no payroll deduction arises,
+            until the disbursement is recorded with its reference.
+        </p>
+    </div>
+}
+
+@if (_deciding is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deciding = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Send back</h2>
+            <button class="btn btn-quiet" @onclick="() => _deciding = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Reason *</label><input @bind="_reason" /></div>
+            </div>
+            <p class="muted small">
+                A reason is required: the person who has to fix this needs to know what is wrong.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="DecideAsync">Send back</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum DecisionKind { Timesheet, Leave, Loan }
+
+    private List<Timesheet> _timesheets = new();
+    private List<LeaveRequest> _leave = new();
+    private List<EmployeeLoan> _loans = new();
+    private List<Employee> _employees = new();
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private (DecisionKind Kind, Guid Id)? _deciding;
+    private string _reason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _employees = Db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == _companyId).ToList();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Db.ChangeTracker.Clear();
+
+        _timesheets = Session.HasPermission(Permissions.TimeView)
+            ? await TimesheetService.GetApprovalQueueAsync(_companyId)
+            : new List<Timesheet>();
+
+        _leave = Session.HasPermission(Permissions.LeaveView)
+            ? await LeaveService.GetApprovalQueueAsync(_companyId)
+            : new List<LeaveRequest>();
+
+        _loans = Session.HasPermission(Permissions.LoansView)
+            ? await LoanService.GetApprovalQueueAsync(_companyId)
+            : new List<EmployeeLoan>();
+    }
+
+    private string EmployeeName(Guid employeeId) =>
+        _employees.FirstOrDefault(e => e.Id == employeeId)?.FullName ?? "Unknown";
+
+    private void OpenDecision(DecisionKind kind, Guid id)
+    {
+        _deciding = (kind, id);
+        _reason = string.Empty;
+    }
+
+    private async Task ApproveTimesheetAsync(Guid id)
+    {
+        var result = await TimesheetService.ApproveAsync(id);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+
+    private async Task ApproveLeaveAsync(Guid id)
+    {
+        var result = await LeaveService.ApproveAsync(id);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+
+    private async Task ApproveLoanAsync(Guid id)
+    {
+        var result = await LoanService.ApproveAsync(id);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+
+    private async Task DecideAsync()
+    {
+        if (_deciding is not { } decision)
+        {
+            return;
+        }
+
+        var result = decision.Kind switch
+        {
+            DecisionKind.Timesheet => await TimesheetService.ReturnAsync(decision.Id, _reason),
+            DecisionKind.Leave => await LeaveService.ReturnAsync(decision.Id, _reason),
+            _ => await LoanService.RejectAsync(decision.Id, _reason)
+        };
+
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _deciding = null;
+        }
+
+        await LoadAsync();
+    }
+}

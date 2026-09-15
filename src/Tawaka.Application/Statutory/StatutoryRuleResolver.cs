@@ -111,6 +111,13 @@ public sealed class StatutoryRuleResolver : IStatutoryRuleResolver
             return taxRule.PeriodBasis == query.PeriodBasis.Value;
         }
 
+        // A divisor converts from one salary frequency, for the same reason: the number of working
+        // days in a month is not the number in a week.
+        if (rule is PayDivisorRule divisor && query.PeriodBasis.HasValue)
+        {
+            return divisor.SalaryBasis == query.PeriodBasis.Value;
+        }
+
         return true;
     }
 
@@ -132,6 +139,8 @@ public sealed class StatutoryRuleResolver : IStatutoryRuleResolver
                 string.Equals(exemption.ExemptionType.ToString(), query.Discriminator, StringComparison.OrdinalIgnoreCase),
             NssaEligibilityRule eligibility =>
                 string.Equals(eligibility.EmploymentTypeCode, query.Discriminator, StringComparison.OrdinalIgnoreCase),
+            OvertimeRule overtime =>
+                string.Equals(overtime.CategoryCode, query.Discriminator, StringComparison.OrdinalIgnoreCase),
             _ => true
         };
     }

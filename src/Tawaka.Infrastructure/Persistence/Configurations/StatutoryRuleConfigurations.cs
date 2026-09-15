@@ -165,3 +165,34 @@ public sealed class CurrencyTaxStrategyRuleConfiguration
         builder.Property(r => r.AdvisorReference).HasMaxLength(200);
     }
 }
+
+public sealed class OvertimeRuleConfiguration : IEntityTypeConfiguration<OvertimeRule>
+{
+    public void Configure(EntityTypeBuilder<OvertimeRule> builder)
+    {
+        builder.ToTable("OvertimeRules");
+        builder.Property(r => r.CategoryCode).HasMaxLength(40).IsRequired();
+        builder.Property(r => r.CategoryName).HasMaxLength(200).IsRequired();
+        builder.Property(r => r.EmploymentTypeCode).HasMaxLength(40);
+
+        // Nullable: an overtime category can be known to exist without its rate having been read
+        // from an authoritative source, and null must never be mistaken for 1.0.
+        builder.Property(r => r.Multiplier)
+            .HasConversion(new NullableScaledDecimalConverter(MoneyScales.Rate));
+        builder.Property(r => r.ThresholdHours)
+            .HasConversion(new NullableScaledDecimalConverter(MoneyScales.Money));
+    }
+}
+
+public sealed class PayDivisorRuleConfiguration : IEntityTypeConfiguration<PayDivisorRule>
+{
+    public void Configure(EntityTypeBuilder<PayDivisorRule> builder)
+    {
+        builder.ToTable("PayDivisorRules");
+        builder.Property(r => r.EmploymentTypeCode).HasMaxLength(40);
+        builder.Property(r => r.DaysInPeriod)
+            .HasConversion(new NullableScaledDecimalConverter(MoneyScales.Money));
+        builder.Property(r => r.HoursInPeriod)
+            .HasConversion(new NullableScaledDecimalConverter(MoneyScales.Money));
+    }
+}

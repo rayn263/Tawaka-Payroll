@@ -224,6 +224,7 @@ public sealed class StatutoryRuleSeeder
         });
 
         SeedNssaEligibility(from);
+        SeedOvertimeAndDivisor(from, to);
 
         // ---- Employer levies ---------------------------------------------------------------
         _context.EmployerLevyRules.Add(new EmployerLevyRule
@@ -376,6 +377,83 @@ public sealed class StatutoryRuleSeeder
                 Source = "ZIMRA-attributed aggregation guidance, which references RTGS$ and may " +
                          "predate ZiG",
                 SourceReference = SpecReference + " §2"
+            }
+        });
+    }
+
+    /// <summary>
+    /// Overtime categories and the pay divisor.
+    /// <para>
+    /// The compliance specification §14 records that the overtime <em>rate</em> is a contractual
+    /// and NEC matter rather than a national statutory rate, while the statutory <em>treatment</em>
+    /// — taxable, excluded from NSSA insurable earnings — is evidenced. So these are seeded with
+    /// the treatment from §14 and with the multipliers most commonly cited, all graded Unverified:
+    /// an employer verifies them against their own contracts or collective bargaining agreement,
+    /// which is a thing they can actually do, unlike reading a blocked ZIMRA page.
+    /// </para>
+    /// </summary>
+    private void SeedOvertimeAndDivisor(DateOnly from, DateOnly to)
+    {
+        var categories = new[]
+        {
+            ("OT_WEEKDAY", "Overtime (ordinary day)", 1.5m),
+            ("OT_SUNDAY", "Overtime (Sunday)", 2.0m),
+            ("OT_PUBLIC_HOLIDAY", "Overtime (public holiday)", 2.0m)
+        };
+
+        foreach (var (code, name, multiplier) in categories)
+        {
+            _context.StatutoryRules.Add(new OvertimeRule
+            {
+                RuleId = $"OVERTIME-2026-{code}",
+                Name = name,
+                CategoryCode = code,
+                CategoryName = name,
+                Multiplier = multiplier,
+                CalculationMethod = CalculationMethod.Multiplier,
+                EffectiveFrom = from,
+                EffectiveTo = to,
+
+                // §14: overtime is fully taxable but excluded from NSSA insurable earnings. That
+                // exclusion is the operationally significant one — applying NSSA to gross
+                // over-deducts from exactly the site staff who work the most overtime.
+                IsTaxable = true,
+                IsNssaApplicable = false,
+                VerificationStatus = VerificationStatus.Unverified,
+                Notes = "SEED DATA. The multiplier is the commonly cited rate, not a verified one. " +
+                        "Where a NEC collective bargaining agreement applies it is a Statutory " +
+                        "Instrument and governs (spec Q23, Q31). Confirm against the contract of " +
+                        "employment or the applicable CBA before using in live payroll.",
+                Source = new RuleSource
+                {
+                    Source = "Commonly cited overtime rates; contractual or NEC in origin",
+                    SourceReference = SpecReference + " §14"
+                }
+            });
+        }
+
+        // The divisor that converts a monthly salary into a daily or hourly rate. Nothing about
+        // this is arithmetic: 22 working days is a convention, and which convention applies
+        // changes what an employee loses for a day of unpaid leave (spec Q33).
+        _context.StatutoryRules.Add(new PayDivisorRule
+        {
+            RuleId = "PAY-DIVISOR-2026-MONTHLY",
+            Name = "Monthly salary to daily and hourly rate",
+            SalaryBasis = PeriodBasis.Monthly,
+            DaysInPeriod = 22m,
+            HoursInPeriod = 176m,
+            CalculationMethod = CalculationMethod.Divisor,
+            EffectiveFrom = from,
+            EffectiveTo = to,
+            VerificationStatus = VerificationStatus.Unverified,
+            Notes = "SEED DATA. 22 working days and 176 ordinary hours is a common convention, " +
+                    "not an established one. The Labour Act and the applicable NEC agreement " +
+                    "govern (spec Q33). Until verified, overtime for salaried staff and unpaid " +
+                    "leave deductions calculate in development mode only.",
+            Source = new RuleSource
+            {
+                Source = "Common payroll convention; no authoritative source obtained",
+                SourceReference = SpecReference + " §14, Q33"
             }
         });
     }

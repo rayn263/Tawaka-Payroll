@@ -209,16 +209,20 @@ PAYROLL
   ├─ Approvals                (queue for authorised approvers)
   └─ Payslips                 (generate, view, print, re-issue)
 
-TIME & ATTENDANCE            [Phase 2]
-  ├─ Timesheets
-  ├─ Leave Requests
-  ├─ Leave Balances
-  └─ Public Holidays
+TIME & ATTENDANCE            (built, Milestone 5)
+  ├─ Timesheets               (per-day capture, overtime by category, project allocation)
+  └─ Approval queue           (timesheets, leave and loans awaiting a decision)
 
-LOANS & ADVANCES             [Phase 2]
-  ├─ Loans
-  ├─ Advances
-  └─ Repayment Schedules
+LEAVE                        (built, Milestone 5)
+  ├─ Requests
+  ├─ Balances                 (undetermined where the entitlement is unestablished)
+  └─ Leave Types
+
+HOLIDAY CALENDAR             (built, Milestone 5 — starts empty, by design)
+
+LOANS & ADVANCES             (built, Milestone 5)
+  ├─ Loans and advances       (schedule, derived balance, statement)
+  └─ Repayment and reversal
 
 STATUTORY
   ├─ Obligations Register     (calculated / deducted / approved / paid, per period per currency)
@@ -583,16 +587,26 @@ reference, partial payments and audited reversal; the approve → finalise → p
 the lock extended to a run's result rows; the seven core reports, each split by currency; the
 obligation register and reports screens (4 tables, 56 in total).
 
+**Milestone 5 — Time, attendance, leave and loans** (2026-09-15): controlled payroll inputs, each
+moving Draft → Submitted → Approved → Rejected/Returned → Locked with segregation of duties on
+every approval. Timesheets with per-day entries, project and site allocation and overtime by
+category; overtime and the salary-to-rate divisor as dated, graded statutory rules; leave types,
+entitlements, an append-only balance ledger and requests with overlap validation; a captured
+holiday calendar with no shipped holidays; loans and advances with schedules, a derived balance,
+capped deductions, early settlement and audited reversal. The engine gained a first stage that
+prices approved time, leave and loans; the snapshot gained those inputs and is now stored, hashed
+and sealed. Five screens and an approval queue (16 tables, 72 in total).
+
 ### In progress
-- Nothing. Milestone 4 is complete and awaiting approval before Milestone 5 begins.
+- Nothing. Milestone 5 is complete and awaiting approval before Milestone 6 begins.
 
 ### Pending — Phase 1
 Report file export (PDF, Excel, CSV) · dashboard warning cards beyond the counters · backup and
 restore.
 
 ### Pending — Phase 2
-Timesheets · leave · loans and advances · public holiday calendar · the full audit log screen ·
-the reopen diff report · casual six-week and contract expiry warnings.
+Outstanding-obligation reminders · the full audit log screen · the reopen diff report · contract
+expiry warnings.
 
 ### Pending — Phase 3
 Accounting/journal export · statutory return exports · bank payment files · advanced reporting ·
@@ -604,5 +618,5 @@ never been compiled, because the build environment is Linux; and no Razor screen
 or clicked, only type-checked.
 
 ### Next development step
-Milestone 4 complete and pushed; awaiting approval. Next is **Milestone 5 — time, attendance,
-leave and loans**, detailed in `PROJECT_STATE.md` §8.
+Milestone 5 complete and pushed; awaiting approval. Next is **Milestone 6**, proposed in the
+Milestone 5 completion report and summarised in `PROJECT_STATE.md` §8.

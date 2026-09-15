@@ -1,0 +1,289 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/leave"
+@using Tawaka.Application.Leave
+@using Tawaka.Domain.Leave
+@inject PayrollDbContext Db
+@inject LeaveService LeaveService
+@inject UserSession Session
+
+@* Leave requests, entitlements and balances. A balance the business has not established shows as
+   "—", never as zero days (ADR-032). *@
+
+<div class="page-header">
+    <div>
+        <h1>Leave</h1>
+        <div class="subtitle">
+            Requests, entitlements and balances. Payroll applies approved leave only.
+        </div>
+    </div>
+    <a class="btn btn-quiet" href="approvals">Approval queue</a>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+<div class="tabs">
+    @foreach (var tab in new[] { "Requests", "Balances", "Leave types" })
+    {
+        <button class="tab @(_tab == tab ? "active" : null)" @onclick="() => _tab = tab">@tab</button>
+    }
+</div>
+
+@if (_tab == "Requests")
+{
+    @if (Session.HasPermission(Permissions.LeaveEdit))
+    {
+        <div class="card">
+            <h2>Request leave</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Employee *</label>
+                    <select @bind="_employeeId">
+                        <option value="@Guid.Empty">Select…</option>
+                        @foreach (var employee in _employees)
+                        {
+                            <option value="@employee.Id">@employee.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Leave type *</label>
+                    <select @bind="_leaveTypeId">
+                        <option value="@Guid.Empty">Select…</option>
+                        @foreach (var type in _types)
+                        {
+                            <option value="@type.Id">@type.Name (@(type.IsPaid ? "paid" : "unpaid"))</option>
+                        }
+                    </select>
+                </div>
+                <div><label>From *</label><input type="date" @bind="_start" /></div>
+                <div><label>To *</label><input type="date" @bind="_end" /></div>
+                <div><label>Reason</label><input @bind="_reason" /></div>
+            </div>
+            <p class="muted small">
+                Days are counted from the working calendar. Leave that overlaps an existing request
+                is refused: two approved requests over the same day would either double-count the
+                entitlement or double-dock the pay.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="RequestAsync">Create request</button>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <h2>Requests</h2>
+        @if (_requests.Count == 0)
+        {
+            <EmptyState Title="No leave requests yet" />
+        }
+        else
+        {
+            <div class="scroll-x">
+                <table class="data">
+                    <thead>
+                    <tr><th>Employee</th><th>Type</th><th>From</th><th>To</th>
+                        <th class="num">Days</th><th>Paid</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var request in _requests)
+                    {
+                        <tr>
+                            <td class="strong">@EmployeeName(request.EmployeeId)</td>
+                            <td>@request.LeaveType?.Name</td>
+                            <td>@request.StartDate.ToString("dd MMM yyyy")</td>
+                            <td>@request.EndDate.ToString("dd MMM yyyy")</td>
+                            <td class="num">@request.Days.ToString("N2")</td>
+                            <td>@(request.IsPaid ? "Paid" : "Unpaid")</td>
+                            <td><StatusBadge Label="@request.ApprovalStatus.ToString()"
+                                             Tone="@Tone(request.ApprovalStatus)" /></td>
+                            <td>
+                                @if (InputApprovalTransitions.CanSubmit(request.ApprovalStatus) &&
+                                     Session.HasPermission(Permissions.LeaveEdit))
+                                {
+                                    <button class="btn btn-secondary"
+                                            @onclick="() => SubmitAsync(request.Id)">Submit</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@if (_tab == "Balances")
+{
+    <div class="card">
+        <h2>Balances</h2>
+        <div class="form-grid">
+            <div>
+                <label>Employee</label>
+                <select @bind="_balanceEmployeeId" @bind:after="LoadBalancesAsync">
+                    <option value="@Guid.Empty">Select…</option>
+                    @foreach (var employee in _employees)
+                    {
+                        <option value="@employee.Id">@employee.FullName</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (_balances.Count == 0)
+        {
+            <EmptyState Title="No leave balances"
+                        Description="A balance appears once leave has been granted or taken." />
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                <tr><th>Leave type</th><th class="num">Entitlement</th><th class="num">Accrued</th>
+                    <th class="num">Taken</th><th class="num">Balance</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var balance in _balances)
+                {
+                    <tr>
+                        <td class="strong">@balance.LeaveType?.Name</td>
+                        <td class="num">@Days(balance.EntitlementDays)</td>
+                        <td class="num">@balance.DaysAccrued.ToString("N2")</td>
+                        <td class="num">@balance.DaysTaken.ToString("N2")</td>
+                        <td class="num strong">@Days(balance.BalanceDays)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <p class="muted small">
+                A balance shown as "—" is <strong>undetermined</strong>, not zero: the entitlement
+                for that leave type has not been established from an authoritative source. Days
+                taken are still counted exactly.
+            </p>
+        }
+    </div>
+}
+
+@if (_tab == "Leave types")
+{
+    <div class="card">
+        <h2>Leave types</h2>
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Code</th><th>Name</th><th>Paid</th><th>Accrual</th>
+                    <th class="num">Entitlement</th><th>Entitlement evidence</th><th>Question</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var type in _types)
+                {
+                    <tr>
+                        <td class="mono">@type.Code</td>
+                        <td class="strong">@type.Name</td>
+                        <td>@(type.IsPaid ? "Paid" : "Unpaid")</td>
+                        <td>@type.AccrualBasis</td>
+                        <td class="num">@Days(type.EntitlementDays)</td>
+                        <td><StatusBadge Verification="type.EntitlementVerificationStatus" /></td>
+                        <td>@(type.ComplianceQuestion ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            No statutory leave entitlement is shipped with the system. The Labour Act and any
+            applicable NEC collective bargaining agreement set them, and neither could be read from
+            an authoritative source — so each is undetermined and tracked as compliance question
+            Q32 until somebody records the figure with its source.
+        </p>
+    </div>
+}
+
+@code {
+    private string _tab = "Requests";
+    private List<Employee> _employees = new();
+    private List<LeaveType> _types = new();
+    private List<LeaveRequest> _requests = new();
+    private List<LeaveEntitlement> _balances = new();
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private Guid _employeeId;
+    private Guid _leaveTypeId;
+    private Guid _balanceEmployeeId;
+    private DateTime _start = DateTime.Today;
+    private DateTime _end = DateTime.Today.AddDays(4);
+    private string _reason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _employees = Db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == _companyId && e.Status == EmployeeStatus.Active)
+            .OrderBy(e => e.LastName).ToList();
+        _types = Db.LeaveTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _companyId && t.IsActive)
+            .OrderBy(t => t.SortOrder).ToList();
+
+        await LoadRequestsAsync();
+    }
+
+    private async Task LoadRequestsAsync()
+    {
+        Db.ChangeTracker.Clear();
+        _requests = await LeaveService.GetRequestsAsync(_companyId);
+    }
+
+    private async Task LoadBalancesAsync()
+    {
+        if (_balanceEmployeeId == Guid.Empty)
+        {
+            _balances = new List<LeaveEntitlement>();
+            return;
+        }
+
+        _balances = await LeaveService.GetBalancesAsync(
+            _balanceEmployeeId, DateOnly.FromDateTime(DateTime.Today));
+    }
+
+    private string EmployeeName(Guid employeeId) =>
+        _employees.FirstOrDefault(e => e.Id == employeeId)?.FullName ?? "Unknown";
+
+    /// <summary>An undetermined figure renders as an em dash, never as 0.00.</summary>
+    private static string Days(decimal? days) => days?.ToString("N2") ?? "—";
+
+    private static string Tone(InputApprovalStatus status) => status switch
+    {
+        InputApprovalStatus.Approved or InputApprovalStatus.Locked => "verified",
+        InputApprovalStatus.Submitted => "supported",
+        InputApprovalStatus.Rejected or InputApprovalStatus.Returned => "unverified",
+        _ => "disabled"
+    };
+
+    private async Task RequestAsync()
+    {
+        var result = await LeaveService.RequestAsync(new LeaveRequestCommand
+        {
+            EmployeeId = _employeeId,
+            LeaveTypeId = _leaveTypeId,
+            StartDate = DateOnly.FromDateTime(_start),
+            EndDate = DateOnly.FromDateTime(_end),
+            Reason = _reason
+        });
+
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _reason = string.Empty;
+        }
+
+        await LoadRequestsAsync();
+    }
+
+    private async Task SubmitAsync(Guid requestId)
+    {
+        var result = await LeaveService.SubmitAsync(requestId);
+        _validation = result.IsValid ? null : result;
+        await LoadRequestsAsync();
+    }
+}

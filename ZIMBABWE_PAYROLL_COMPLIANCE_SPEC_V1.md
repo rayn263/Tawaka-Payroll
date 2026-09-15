@@ -1,7 +1,7 @@
 # ZIMBABWE PAYROLL COMPLIANCE SPECIFICATION v1.0
 
 **Status:** DRAFT — awaiting approval. Not yet authoritative.
-**Research date:** 12 September 2026 · **Revised:** 15 September 2026 (Milestone 4 recheck)
+**Research date:** 12 September 2026 · **Revised:** 15 September 2026 (Milestone 5)
 **Scope:** Statutory basis for the Tawaka Payroll calculation engine.
 **Supersedes:** the compliance section of `docs/COMPLIANCE_ZIMBABWE.md` (that document remains as
 the architectural risk register; this document governs calculation).
@@ -57,6 +57,11 @@ upgraded, and no ZiG table value in this document was obtained from a primary so
 What the search channel did add this round is catalogue information rather than values — recorded
 in §1.4a, because "which tables exist" and "what is in them" are different questions and only the
 first moved.
+
+**Rechecked again on 15 September 2026 during Milestone 5**, with the same result: `403` at
+CONNECT for `zimra.co.zw` and `veritaszim.net`. Three attempts across two milestones, all denied
+by the same policy. No rule has been upgraded. §1.4a now states explicitly what is and is not being
+claimed about the ZWG monthly table.
 
 ---
 
@@ -188,7 +193,30 @@ are possible and the snippets cannot distinguish them:
 2. Monthly ZWG remuneration is meant to be taxed via the annual table (a cumulative/FDS approach).
 3. The listing reflects an actual gap at the time it was indexed.
 
-This is now **Q29**. It matters because the engine resolves a table by (currency, period basis)
+This is now **Q29**.
+
+#### Q29 — what is and is not being claimed (rechecked 15 September 2026)
+
+You asked that two things be kept apart, and they are different in kind:
+
+| | Claim | Status |
+|---|---|---|
+| **(a)** | *This environment could not retrieve an authoritative ZWG monthly PAYE table.* | **TRUE, and evidenced.** ZIMRA returns `403` at the CONNECT stage on every attempt, on three separate dates (12 Sep, 15 Sep twice). The proxy logs each as a policy denial; the request never reaches ZIMRA. |
+| **(b)** | *No ZWG monthly PAYE table exists.* | **NOT CLAIMED, and not supported.** The only evidence for it is one third-party search listing that did not show one. A listing that omits a document is not a document that says the thing does not exist. |
+
+**Nothing in the system encodes (b).** The seeded ZWG rules cover the period bases the evidence
+names; there is no rule, flag, note or code path asserting that a monthly ZWG table is absent from
+ZIMRA's catalogue. What the system does encode is (a): where a table cannot be resolved for a
+(currency, period basis) pair, the figure is **unresolved** and the reason given is that the rule
+has not been configured and verified — which is true whichever of (a) or (b) turns out to hold.
+
+The practical consequence is the same in both cases and requires no decision between them: ZiG
+monthly payroll cannot run live until a ZWG monthly table is configured and verified, or until an
+authoritative source establishes that monthly ZiG remuneration is taxed some other way. The
+difference matters only for *what the employer must go and find out*, which is why both readings
+are recorded rather than one being chosen.
+
+It matters because the engine resolves a table by (currency, period basis)
 and refuses to substitute — so if no ZWG monthly table exists, ZiG monthly payroll has no table to
 resolve, and that is a statutory question, not a configuration mistake. Until Q29 is answered the
 system must report a missing ZWG monthly table as **unresolved**, and must **not** derive one by
@@ -719,8 +747,18 @@ PAYE on it but no additional NSSA.** A payroll system that naively applies NSSA 
 over-deducts from exactly the site staff who work the most overtime.
 
 Statutory treatment is held separately from the company's overtime **rate** policy (1.5×, 2.0×
-etc.), which is a contractual/NEC matter configured in `EarningTypes.DefaultMultiplier` and is not
-a statutory rule. **Q15 remains a business question, not a compliance one.**
+etc.), which is a contractual/NEC matter. **Q15 remains a business question, not a compliance one**
+— except where a NEC collective bargaining agreement applies, in which case the rate is in a
+Statutory Instrument and is binding (Q23, Q31).
+
+**Milestone 5 implementation note.** The multiplier now lives in a dated, graded `OvertimeRules`
+row rather than in `EarningTypes.DefaultMultiplier`, for the same reason every other rate does: it
+needs an effective date, a source, a verification status and a category, and a single nullable
+column on an earning type carries none of those. The engine reads `OvertimeRules` and nothing else;
+a category with no multiplier refuses rather than paying plain time.
+`EarningTypes.DefaultMultiplier` is retained (renaming or dropping an established column is not
+done casually) but is **not read by the engine** — it is a capture default only, and that is
+recorded in `PROJECT_STATE.md` §6 so it cannot quietly become authoritative again.
 
 ---
 
@@ -1053,11 +1091,16 @@ overtime and bonuses excluded. AIDS Levy 3% of tax after credits.
 | **Q28** | Does the **bonus exemption** apply to any bonus, or only an annual/13th-cheque bonus? | MEDIUM | Determines whether performance and project bonuses qualify |
 | **Q29** | Does ZIMRA publish a **ZWG monthly** PAYE table, or is monthly ZiG remuneration taxed on the annual table? | **HIGH** | Milestone 4 recheck: an indexed ZIMRA listing shows ZWG daily, weekly, fortnightly and annual tables but no monthly one. Blocks monthly ZiG payroll (§1.4a) |
 | **Q30** | Are the **2026 tables actually the 2025 tables** carried forward, with no 2026 publication? | MEDIUM | Reporting from January 2026 indicates no new 2026 tables had been released. Changes which document must be read to verify, and what the rule's source reference should cite (§1.4a) |
+| **Q31** | **Overtime multipliers**: which are contractual, and which are mandated by the Labour Act or by the applicable NEC collective bargaining agreement? | HIGH | Milestone 5. §14 records the rate as contractual (Q15), but where a NEC CBA applies it is a Statutory Instrument and governs (Q23). The engine now prices overtime from dated `OvertimeRules`; each seeded multiplier is Unverified until the employer confirms it against their contracts or CBA |
+| **Q32** | **Statutory leave entitlements**: annual, sick (including the full-pay/half-pay scale), maternity and compassionate — days, service qualification and pay treatment | HIGH | Milestone 5. Set by the Labour Act and by NEC agreements; none could be read. Every seeded leave type has a **null** entitlement, so balances report as undetermined rather than as a number nobody has checked |
+| **Q33** | **Pay divisor**: how a monthly salary converts to a daily and an hourly rate — working days per month and ordinary hours per month | HIGH | Milestone 5. Needed to price overtime for salaried staff and to dock unpaid leave. "22 days" is a convention, not an established rule; the seeded `PayDivisorRule` is Unverified and blocks live payroll for those figures |
 
 ### 25.3 Blocking summary
 
 **Cannot enable live payroll until resolved:** Q26 (critical), Q1, Q3-values, Q6, Q21, Q22.
 **Cannot enable monthly ZiG payroll until resolved:** Q29.
+**Cannot enable overtime or unpaid-leave figures until resolved:** Q31, Q33.
+**Cannot report a leave balance as a figure until resolved:** Q32.
 **Cannot enable for affected employees only:** Q4a, Q5 (project/part-time/intern), Q23, Q24, Q28.
 **Phase 3 only:** Q25, Q27.
 

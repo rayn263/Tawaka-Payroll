@@ -2,11 +2,12 @@
 
 A professional, Windows-based payroll management system for businesses operating in Zimbabwe.
 
-> **Status: Milestone 4 (Payslips, statutory obligations and reports) complete — awaiting approval.**
-> The payroll engine calculates gross, NSSA, taxable income, PAYE, credits, AIDS Levy, employer
-> costs and net pay with a full audit trace behind every figure; payslips render those persisted
-> results without recalculating them; statutory obligations track what is owed, withheld, approved
-> and actually paid as four independent states; and the reports report every currency separately.
+> **Status: Milestone 5 (Time, attendance, leave and loans) complete — awaiting approval.**
+> Payroll now runs on controlled, approved inputs: timesheets with configurable overtime
+> categories, leave with entitlements and balances, a captured holiday calendar, and loans and
+> advances recovered through payroll. Each moves through Draft → Submitted → Approved → Locked, and
+> payroll consumes nothing that has not been approved. The snapshot each calculation ran on is
+> stored, hashed and sealed, so a completed run reproduces against the inputs it actually had.
 > **No live payroll can be produced**: every seeded statutory rule is unverified, so the engine
 > calculates in development mode only and the gate refuses approval. See `PROJECT_STATE.md`.
 
@@ -15,10 +16,10 @@ A professional, Windows-based payroll management system for businesses operating
 ```bash
 apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
 ./build.sh                          # build the cross-platform solution
-./test.sh                           # 529 passing, 3 skipped (pending milestones)
+./test.sh                           # 608 passing, 1 skipped (pending Q4a/Q22)
 ./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll                  # gate closed: calculation only
-dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules   # simulated verification: full workflow
+dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules   # simulated verification: inputs, calculation, obligations
 ```
 
 All screens live in `src/Tawaka.Ui.Shared` and compile anywhere. The Windows host builds from
@@ -42,6 +43,10 @@ It is built around four non-negotiable principles:
    PAYE, AIDS Levy, NSSA and every other obligation move through four independently
    recorded states: CALCULATED → DEDUCTED → APPROVED → PAID. Only a recorded payment with a
    reference, date and method sets PAID.
+
+   The same discipline governs payroll inputs: a timesheet, a leave request or a loan reaches
+   payroll only once somebody other than its author has approved it, and the run records exactly
+   which approved records it read.
 
 4. **Payroll data does not silently change.**
    Every create, update and approval is written to an append-only audit trail with the user,

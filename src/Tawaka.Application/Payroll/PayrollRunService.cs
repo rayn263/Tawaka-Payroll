@@ -2,13 +2,15 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Common;
+using Tawaka.Application.Loans;
 using Tawaka.Application.Security;
+using Tawaka.Application.Statutory.Obligations;
+using Tawaka.Application.Time;
 using Tawaka.Domain.Employees;
 using Tawaka.Domain.Payroll;
 using Tawaka.Domain.Security;
 using Tawaka.Payroll.Engine;
 using Tawaka.Payroll.Engine.Results;
-using Tawaka.Application.Statutory.Obligations;
 
 namespace Tawaka.Application.Payroll;
 
@@ -24,18 +26,25 @@ public sealed class PayrollRunService
 {
     private readonly IPayrollDataContext _context;
     private readonly PayrollSnapshotBuilder _snapshots;
+    private readonly PayrollSnapshotStore _snapshotStore;
     private readonly StatutoryObligationService _obligations;
+    private readonly TimesheetService _timesheets;
+    private readonly LoanService _loans;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
     private readonly PayrollCalculator _calculator = new();
 
     public PayrollRunService(
         IPayrollDataContext context, PayrollSnapshotBuilder snapshots,
-        StatutoryObligationService obligations, ICurrentUser currentUser, IClock clock)
+        PayrollSnapshotStore snapshotStore, StatutoryObligationService obligations,
+        TimesheetService timesheets, LoanService loans, ICurrentUser currentUser, IClock clock)
     {
         _context = context;
         _snapshots = snapshots;
+        _snapshotStore = snapshotStore;
         _obligations = obligations;
+        _timesheets = timesheets;
+        _loans = loans;
         _currentUser = currentUser;
         _clock = clock;
     }
@@ -146,7 +155,12 @@ public sealed class PayrollRunService
             }
 
             var result = _calculator.Calculate(snapshot);
-            Persist(runId, result);
+            var runEmployee = Persist(runId, result);
+
+            // The snapshot is sealed the moment it is calculated. Approved time, leave and loan
+            // balances all move on; without this a recalculation years later would silently use
+            // today's inputs and produce a different, equally defensible figure (ADR-035).
+            _snapshotStore.Capture(runId, runEmployee.Id, snapshot, PayrollCalculator.Version);
 
             foreach (var (key, value) in result.RuleSnapshot)
             {
@@ -250,7 +264,68 @@ public sealed class PayrollRunService
         await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         await _obligations.CreateForRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        await LockConsumedInputsAsync(run, cancellationToken).ConfigureAwait(false);
         return validation;
+    }
+
+    /// <summary>
+    /// Freezes the inputs this run consumed and posts the loan repayments it actually deducted.
+    /// <para>
+    /// Both happen at finalisation rather than at calculation, because a calculated run can still
+    /// be recalculated or abandoned. Moving a loan balance for a run that is later thrown away
+    /// would leave the employee's loan wrong with nothing to point at.
+    /// </para>
+    /// </summary>
+    private async Task LockConsumedInputsAsync(PayrollRun run, CancellationToken cancellationToken)
+    {
+        var sources = await _context.PayrollRunInputSources.AsNoTracking()
+            .Where(s => s.PayrollRunId == run.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var timesheetIds = sources
+            .Where(s => s.InputType == "Timesheet")
+            .Select(s => s.InputId)
+            .Distinct()
+            .ToList();
+
+        await _timesheets.LockForRunAsync(timesheetIds, run.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        var loanLines = await _context.PayrollDeductionLines.AsNoTracking()
+            .Where(l => _context.PayrollRunEmployees
+                .Any(e => e.Id == l.PayrollRunEmployeeId && e.PayrollRunId == run.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var snapshots = await _context.PayrollInputSnapshots.AsNoTracking()
+            .Where(s => s.PayrollRunId == run.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var repayments =
+            new List<(Guid LoanId, Guid? InstalmentId, decimal Amount, string CurrencyCode)>();
+
+        foreach (var record in snapshots)
+        {
+            var snapshot = await _snapshotStore
+                .ReadAsync(record.PayrollRunEmployeeId, cancellationToken).ConfigureAwait(false);
+
+            if (snapshot is null)
+            {
+                continue;
+            }
+
+            // Taken from the sealed snapshot, so what is posted to the loan is exactly what the
+            // calculation deducted — not what the schedule would say today.
+            repayments.AddRange(snapshot.LoanDeductions.Select(loan =>
+                (loan.LoanId, loan.InstalmentId, loan.Amount.Amount, loan.Amount.Currency.Value)));
+        }
+
+        var payDate = run.PayrollPeriod?.PayDate ?? DateOnly.FromDateTime(_clock.Now.Date);
+        await _loans.RecordPayrollRepaymentsAsync(
+            run.Id, run.PayrollPeriodId, repayments, payDate, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -345,7 +420,7 @@ public sealed class PayrollRunService
     }
 
     /// <summary>Writes an engine result to the run, including every trace entry.</summary>
-    private void Persist(Guid runId, PayrollResult result)
+    private PayrollRunEmployee Persist(Guid runId, PayrollResult result)
     {
         var currency = result.Currency.Value;
 
@@ -488,5 +563,6 @@ public sealed class PayrollRunService
         }
 
         _context.PayrollRunEmployees.Add(runEmployee);
+        return runEmployee;
     }
 }

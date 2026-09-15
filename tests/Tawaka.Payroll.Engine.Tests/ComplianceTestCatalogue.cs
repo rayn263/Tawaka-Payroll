@@ -125,6 +125,7 @@ public class ComplianceTestCatalogue
     //                                reproducibility, and the approval gates
     //   PeriodLockTests (infra)      TC-30
     //   StatutoryObligationTests     TC-28 TC-29 TC-29b, and the full obligation state machine
+    //   CasualEngagementAndAdvance   TC-20 TC-33
     //   PayslipTests / ReportTests   payslip reconciliation, zero vs unresolved, currency
     //                                separation in every report
 
@@ -138,10 +139,9 @@ public class ComplianceTestCatalogue
     [Fact(Skip = "Pending compliance question Q4a/Q22: FTE-based ceiling treatment is unestablished.")]
     public void TC_18_Part_time_ceiling_treatment() { }
 
-    [Fact(Skip = NeedsEmployees)] public void TC_20_Advance_recovered_post_tax() { }
-
-    [Fact(Skip = NeedsEmployees)]
-    public void TC_33_Casual_six_week_threshold_warns_without_reclassifying() { }
+    // TC-20 and TC-33 are implemented in Tawaka.Infrastructure.Tests
+    // (CasualEngagementAndAdvanceTests), where the timesheets and loans they depend on exist.
+    // They needed Milestone 5's approved inputs before they could be run against the real engine.
 
     // TC-30 (locked payroll modification) is implemented in Tawaka.Infrastructure.Tests, where the
     // lock interceptor it exercises actually lives.

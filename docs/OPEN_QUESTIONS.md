@@ -54,10 +54,11 @@ rule rows and set their `VerificationStatus`.
 
 ---
 
-## New blocking questions discovered during compliance research (Q21–Q30)
+## New blocking questions discovered during compliance research (Q21–Q33)
 
 Full detail and reasoning in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25.2.
 Q29 and Q30 were found during the Milestone 4 access recheck (§0.1a and §1.4a).
+Q31–Q33 were found during Milestone 5, building time, leave and loan inputs.
 
 | # | Question | Impact | Status |
 |---|---|---|---|
@@ -71,10 +72,13 @@ Q29 and Q30 were found during the Milestone 4 access recheck (§0.1a and §1.4a)
 | **Q28** | Does the bonus exemption apply to any bonus, or only an annual/13th-cheque bonus? | MEDIUM | OPEN |
 | **Q29** | Does ZIMRA publish a **ZWG monthly** PAYE table, or is monthly ZiG remuneration taxed on the annual table? | HIGH | OPEN |
 | **Q30** | Are the 2026 PAYE tables actually the 2025 tables carried forward, with no separate 2026 publication? | MEDIUM | OPEN |
+| **Q31** | Overtime multipliers: which are contractual and which are mandated by the Labour Act or the applicable NEC CBA? | HIGH | OPEN |
+| **Q32** | Statutory leave entitlements: annual, sick (full/half pay scale), maternity, compassionate — days, qualification and pay treatment | HIGH | OPEN |
+| **Q33** | Pay divisor: working days and ordinary hours per month, for converting a salary to a daily and hourly rate | HIGH | OPEN |
 
 ---
 
-## Still explicitly tracked as at Milestone 4 (2026-09-15)
+## Still explicitly tracked as at Milestone 5 (2026-09-15)
 
 As instructed, these remain open and are restated here so they cannot drift out of sight:
 
@@ -83,6 +87,22 @@ As instructed, these remain open and are restated here so they cannot drift out 
   give it, via Form WC50.
 - **Q22** — how the monthly NSSA ceiling applies to weekly and fortnightly payroll.
 - **Q26** — the PAYE fixed-deduction ("less") column. Critical; blocks all PAYE verification.
+- **Q29** — whether a ZWG *monthly* PAYE table exists. See the note below.
+- **Q30** — whether the 2026 tables are the 2025 tables carried forward.
 
-None of the four moved during Milestone 4, and none was worked around in code. Each is represented
-in the engine by a named `UnresolvedItem` rather than by a substituted figure.
+None of these moved during Milestone 5, and none was worked around in code. Each is represented in
+the engine by a named `UnresolvedItem` rather than by a substituted figure.
+
+### Q29 — two claims, kept apart
+
+The instruction was to distinguish these, and they are recorded separately:
+
+- **(a) This environment cannot retrieve an authoritative ZWG monthly PAYE table.** True, and
+  evidenced: ZIMRA returned `403` at the CONNECT stage on 12 September and twice on 15 September.
+- **(b) No ZWG monthly PAYE table exists.** **Not claimed.** The only thing pointing that way is a
+  third-party search listing that did not show one, and a listing that omits a document is not a
+  document saying the thing is absent.
+
+Nothing in the codebase encodes (b). What it encodes is that a table which cannot be resolved for a
+(currency, period basis) pair leaves the figure unresolved — which is the correct behaviour whether
+(a) or (b) turns out to hold. Full note at `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §1.4a.

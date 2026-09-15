@@ -81,6 +81,123 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Calendars.HolidayCalendar", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("HolidayCalendars", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Calendars.PublicHoliday", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ActualDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HolidayCalendarId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VerificationStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HolidayCalendarId", "Date");
+
+                    b.ToTable("PublicHolidays", (string)null);
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Companies.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1498,6 +1615,559 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.ToTable("EmploymentTypes", (string)null);
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveEntitlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EntitlementDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("LeaveTypeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("LeaveYearEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("LeaveYearStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveTypeId");
+
+                    b.HasIndex("EmployeeId", "LeaveTypeId", "LeaveYearStart")
+                        .IsUnique();
+
+                    b.ToTable("LeaveEntitlements", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ApprovalStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ConsumedByPayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CorrectsLeaveRequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Days")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("HolidayCalendarId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("LeaveTypeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveTypeId");
+
+                    b.HasIndex("CompanyId", "ApprovalStatus");
+
+                    b.HasIndex("EmployeeId", "StartDate", "EndDate");
+
+                    b.ToTable("LeaveRequests", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Days")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsReversed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("LeaveEntitlementId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LeaveRequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LeaveTypeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversedByTransactionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TransactionType")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveEntitlementId");
+
+                    b.HasIndex("LeaveRequestId");
+
+                    b.ToTable("LeaveTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AccrualBasis")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CarriesForward")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ComplianceQuestion")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EntitlementDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntitlementSource")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EntitlementVerificationStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IncludesNonWorkingDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("MaximumCarryForwardDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("RequiresApproval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StatutoryEntitlementDays")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("LeaveTypes", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.EmployeeLoan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowsOverRecovery")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ApprovalStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DisbursementDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisbursementReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("FirstInstalmentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("InstalmentAmount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("InstalmentCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InterestAmount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("InterestRatePercent")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LoanNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OverRecoveryApprovalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OverRecoveryApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PrincipalAmount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "LoanNumber")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "Status");
+
+                    b.ToTable("EmployeeLoans", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.LoanInstalment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("DeductedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeLoanId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("InstalmentNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InterestPortion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("PayrollPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PrincipalPortion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SkipReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeLoanId", "InstalmentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollPeriodId", "Status");
+
+                    b.ToTable("LoanInstalments", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.LoanTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeLoanId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsReversed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LoanInstalmentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PayrollPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReversedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversedByTransactionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TransactionType")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeLoanId");
+
+                    b.HasIndex("PayrollRunId");
+
+                    b.ToTable("LoanTransactions", (string)null);
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Organisation.Client", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2209,6 +2879,66 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.ToTable("PayrollEmployerCostLines", (string)null);
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Payroll.PayrollInputSnapshotRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EngineVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayrollRunEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SealedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunEmployeeId")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollRunId");
+
+                    b.ToTable("PayrollInputSnapshots", (string)null);
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Payroll.PayrollPeriod", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2515,6 +3245,47 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("PayrollRunEmployees", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Payroll.PayrollRunInputSource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InputId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InputType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayrollRunEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InputType", "InputId");
+
+                    b.HasIndex("PayrollRunId", "InputType");
+
+                    b.ToTable("PayrollRunInputSources", (string)null);
                 });
 
             modelBuilder.Entity("Tawaka.Domain.Payroll.PayrollUnresolvedItem", b =>
@@ -3200,6 +3971,174 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.ToTable("TaxBrackets", (string)null);
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Time.TimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DaysWorked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsAbsence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPublicHoliday")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LeaveRequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OrdinaryHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProjectName")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectSiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProjectSiteName")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PublicHolidayId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TimesheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimesheetId", "WorkDate")
+                        .IsUnique();
+
+                    b.ToTable("TimeEntries", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Time.TimeEntryOvertimeLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Hours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OvertimeCategoryCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TimeEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimeEntryId", "OvertimeCategoryCode")
+                        .IsUnique();
+
+                    b.ToTable("TimeEntryOvertimeLines", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Time.Timesheet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ApprovalStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ConsumedByPayrollRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CorrectsTimesheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayrollPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "ApprovalStatus");
+
+                    b.HasIndex("EmployeeId", "PayrollPeriodId", "CorrectsTimesheetId");
+
+                    b.ToTable("Timesheets", (string)null);
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Statutory.AidsLevyRule", b =>
                 {
                     b.HasBaseType("Tawaka.Domain.Statutory.StatutoryRule");
@@ -3348,6 +4287,59 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.ToTable("NssaRules", (string)null);
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Statutory.OvertimeRule", b =>
+                {
+                    b.HasBaseType("Tawaka.Domain.Statutory.StatutoryRule");
+
+                    b.Property<string>("CategoryCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmploymentTypeCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsNssaApplicable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsTaxable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("Multiplier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ThresholdHours")
+                        .HasColumnType("INTEGER");
+
+                    b.ToTable("OvertimeRules", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Statutory.PayDivisorRule", b =>
+                {
+                    b.HasBaseType("Tawaka.Domain.Statutory.StatutoryRule");
+
+                    b.Property<long?>("DaysInPeriod")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmploymentTypeCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("HoursInPeriod")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SalaryBasis")
+                        .HasColumnType("INTEGER");
+
+                    b.ToTable("PayDivisorRules", (string)null);
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Statutory.TaxCreditRule", b =>
                 {
                     b.HasBaseType("Tawaka.Domain.Statutory.StatutoryRule");
@@ -3400,6 +4392,17 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.ToTable("TaxRules", (string)null);
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Calendars.PublicHoliday", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Calendars.HolidayCalendar", "Calendar")
+                        .WithMany("Holidays")
+                        .HasForeignKey("HolidayCalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Calendar");
                 });
 
             modelBuilder.Entity("Tawaka.Domain.Companies.CompanyBankAccount", b =>
@@ -3504,6 +4507,59 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveEntitlement", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Leave.LeaveType", "LeaveType")
+                        .WithMany()
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveRequest", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Leave.LeaveType", "LeaveType")
+                        .WithMany()
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveTransaction", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Leave.LeaveEntitlement", null)
+                        .WithMany("Transactions")
+                        .HasForeignKey("LeaveEntitlementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.LoanInstalment", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Loans.EmployeeLoan", "Loan")
+                        .WithMany("Instalments")
+                        .HasForeignKey("EmployeeLoanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Loan");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.LoanTransaction", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Loans.EmployeeLoan", "Loan")
+                        .WithMany("Transactions")
+                        .HasForeignKey("EmployeeLoanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Loan");
                 });
 
             modelBuilder.Entity("Tawaka.Domain.Organisation.Project", b =>
@@ -3733,6 +4789,26 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.Navigation("TaxRule");
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Time.TimeEntry", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Time.Timesheet", "Timesheet")
+                        .WithMany("Entries")
+                        .HasForeignKey("TimesheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Timesheet");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Time.TimeEntryOvertimeLine", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Time.TimeEntry", null)
+                        .WithMany("OvertimeLines")
+                        .HasForeignKey("TimeEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Statutory.AidsLevyRule", b =>
                 {
                     b.HasOne("Tawaka.Domain.Statutory.StatutoryRule", null)
@@ -3787,6 +4863,24 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Statutory.OvertimeRule", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Statutory.StatutoryRule", null)
+                        .WithOne()
+                        .HasForeignKey("Tawaka.Domain.Statutory.OvertimeRule", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Statutory.PayDivisorRule", b =>
+                {
+                    b.HasOne("Tawaka.Domain.Statutory.StatutoryRule", null)
+                        .WithOne()
+                        .HasForeignKey("Tawaka.Domain.Statutory.PayDivisorRule", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Statutory.TaxCreditRule", b =>
                 {
                     b.HasOne("Tawaka.Domain.Statutory.StatutoryRule", null)
@@ -3814,6 +4908,11 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Tawaka.Domain.Calendars.HolidayCalendar", b =>
+                {
+                    b.Navigation("Holidays");
+                });
+
             modelBuilder.Entity("Tawaka.Domain.Companies.Company", b =>
                 {
                     b.Navigation("BankAccounts");
@@ -3828,6 +4927,18 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.Navigation("PaymentAccounts");
 
                     b.Navigation("StatutoryProfile");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Leave.LeaveEntitlement", b =>
+                {
+                    b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Loans.EmployeeLoan", b =>
+                {
+                    b.Navigation("Instalments");
+
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("Tawaka.Domain.Organisation.Project", b =>
@@ -3870,6 +4981,16 @@ namespace Tawaka.Infrastructure.Persistence.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Time.TimeEntry", b =>
+                {
+                    b.Navigation("OvertimeLines");
+                });
+
+            modelBuilder.Entity("Tawaka.Domain.Time.Timesheet", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("Tawaka.Domain.Statutory.TaxRule", b =>

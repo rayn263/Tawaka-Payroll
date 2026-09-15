@@ -139,9 +139,19 @@ public sealed class PeriodLockInterceptor : SaveChangesInterceptor
         context.Set<PayrollRunEmployee>().AsNoTracking()
             .Any(e => e.Id == row.PayrollRunEmployeeId && lockedRunIds.Contains(e.PayrollRunId));
 
+    /// <summary>
+    /// Tests the status as it was <em>loaded</em>, not as it stands now. Locking something is a
+    /// legitimate transition and must be allowed to save; touching something that was already
+    /// locked is not.
+    /// </summary>
     private static bool WasLockedWhenLoaded(EntityEntry entry, ILockable current)
     {
-        var statusProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Status");
+        // Payroll runs and periods carry "Status"; inputs carry "ApprovalStatus". Both end in a
+        // Locked member, and both need the original value rather than the pending one.
+        var statusProperty =
+            entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Status") ??
+            entry.Properties.FirstOrDefault(p => p.Metadata.Name == "ApprovalStatus");
+
         if (statusProperty is null)
         {
             return current.IsLocked;

@@ -1,0 +1,435 @@
+@namespace Tawaka.Ui.Shared.Components.Pages
+@page "/time"
+@using Tawaka.Application.Time
+@using Tawaka.Domain.Time
+@inject PayrollDbContext Db
+@inject TimesheetService TimesheetService
+@inject UserSession Session
+
+@* Captures attendance. Nothing here works out what time is worth: the hours go into the snapshot
+   and the engine prices them from the dated overtime rules (ADR-031). *@
+
+<div class="page-header">
+    <div>
+        <h1>Time &amp; attendance</h1>
+        <div class="subtitle">
+            Hours and days against dates, projects and sites. Payroll consumes approved timesheets
+            and nothing else.
+        </div>
+    </div>
+    <a class="btn btn-quiet" href="approvals">Approval queue</a>
+</div>
+
+<ValidationSummaryPanel Result="_validation" />
+
+<div class="card">
+    <h2>Period</h2>
+    <div class="form-grid">
+        <div>
+            <label>Payroll period</label>
+            <select @bind="SelectedPeriodId" @bind:after="LoadAsync">
+                @foreach (var period in _periods)
+                {
+                    <option value="@period.Id">@period.Name</option>
+                }
+            </select>
+        </div>
+        @if (Session.HasPermission(Permissions.TimeEdit) && _periods.Count > 0)
+        {
+            <div>
+                <label>Employee</label>
+                <select @bind="_newEmployeeId">
+                    <option value="@Guid.Empty">Select an employee…</option>
+                    @foreach (var employee in _employees)
+                    {
+                        <option value="@employee.Id">@employee.FullName (@employee.EmployeeNumber)</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="CreateAsync">Start timesheet</button>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_timesheets.Count == 0)
+{
+    <div class="card">
+        <EmptyState Title="No timesheets for this period"
+                    Description="Start one for each employee whose pay depends on time worked." />
+    </div>
+}
+else
+{
+    <div class="card">
+        <h2>Timesheets</h2>
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Employee</th><th class="num">Days</th><th class="num">Ordinary hours</th>
+                    <th class="num">Overtime hours</th><th>Status</th><th>Submitted</th>
+                    <th>Approved by</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var sheet in _timesheets)
+                {
+                    <tr class="@(sheet.Id == _editingId ? "selected" : null)">
+                        <td class="strong">
+                            @EmployeeName(sheet.EmployeeId)
+                            @if (sheet.IsCorrection)
+                            {
+                                <span class="badge supported">correction</span>
+                            }
+                        </td>
+                        <td class="num">@sheet.TotalDaysWorked.ToString("N2")</td>
+                        <td class="num">@sheet.TotalOrdinaryHours.ToString("N2")</td>
+                        <td class="num">@sheet.TotalOvertimeHours.ToString("N2")</td>
+                        <td><StatusBadge Label="@sheet.ApprovalStatus.ToString()"
+                                         Tone="@Tone(sheet.ApprovalStatus)" /></td>
+                        <td>@(sheet.SubmittedAt?.ToString("dd MMM HH:mm") ?? "—")</td>
+                        <td>@(sheet.ApprovedBy ?? "—")</td>
+                        <td>
+                            @if (InputApprovalTransitions.CanEdit(sheet.ApprovalStatus) &&
+                                 Session.HasPermission(Permissions.TimeEdit))
+                            {
+                                <button class="btn btn-secondary" @onclick="() => Edit(sheet)">Capture</button>
+                            }
+                            else if (sheet.ApprovalStatus is InputApprovalStatus.Approved
+                                         or InputApprovalStatus.Locked &&
+                                     Session.HasPermission(Permissions.TimeEdit))
+                            {
+                                <button class="btn btn-quiet" @onclick="() => OpenCorrection(sheet)">Correct</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            A submitted or approved timesheet is not editable. Correcting one creates a new
+            timesheet that supersedes it; the original stays exactly as the run that consumed it
+            saw it.
+        </p>
+    </div>
+}
+
+@if (_editing is not null)
+{
+    <div class="card">
+        <div class="page-header">
+            <div>
+                <h2>@EmployeeName(_editing.EmployeeId)</h2>
+                <div class="subtitle">
+                    @_editing.PeriodStart.ToString("dd MMM") – @_editing.PeriodEnd.ToString("dd MMM yyyy")
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn btn-secondary" @onclick="SaveEntriesAsync">Save</button>
+                <button class="btn btn-primary" @onclick="SubmitAsync">Submit for approval</button>
+            </div>
+        </div>
+
+        <div class="scroll-x">
+            <table class="data">
+                <thead>
+                <tr><th>Date</th><th>Day</th><th class="num">Ordinary hours</th>
+                    <th class="num">Days</th><th>Project</th>
+                    @foreach (var category in _overtimeCategories)
+                    {
+                        <th class="num">@category</th>
+                    }
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr class="@(row.IsPublicHoliday ? "holiday-row" : null)">
+                        <td>@row.Date.ToString("dd MMM")</td>
+                        <td>
+                            @row.Date.DayOfWeek.ToString().Substring(0, 3)
+                            @if (row.IsPublicHoliday)
+                            {
+                                <span class="badge supported" title="@row.HolidayName">holiday</span>
+                            }
+                        </td>
+                        <td class="num"><input type="number" step="0.25" @bind="row.OrdinaryHours" /></td>
+                        <td class="num"><input type="number" step="0.5" @bind="row.DaysWorked" /></td>
+                        <td>
+                            <select @bind="row.ProjectId">
+                                <option value="@Guid.Empty">—</option>
+                                @foreach (var project in _projects)
+                                {
+                                    <option value="@project.Id">@project.Name</option>
+                                }
+                            </select>
+                        </td>
+                        @foreach (var category in _overtimeCategories)
+                        {
+                            var code = category;
+                            <td class="num">
+                                <input type="number" step="0.25"
+                                       value="@row.Overtime.GetValueOrDefault(code)"
+                                       @onchange="e => SetOvertime(row, code, e.Value?.ToString())" />
+                            </td>
+                        }
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted small">
+            Overtime is captured by category. What each category is worth comes from its own dated
+            rule, and a category with no established rate refuses rather than paying plain time.
+        </p>
+    </div>
+}
+
+@if (_correcting is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _correcting = null"></div>
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h2>Correct a timesheet</h2>
+                <div class="subtitle">@EmployeeName(_correcting.EmployeeId)</div>
+            </div>
+            <button class="btn btn-quiet" @onclick="() => _correcting = null">Cancel</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div><label>Reason *</label><input @bind="_correctionReason" /></div>
+            </div>
+            <p class="muted small">
+                A correction is a new timesheet that supersedes this one. The original is never
+                edited: it is what the payroll run that consumed it actually saw.
+            </p>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="CreateCorrectionAsync">Create correction</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed class Row
+    {
+        public DateOnly Date { get; init; }
+        public decimal OrdinaryHours { get; set; }
+        public decimal DaysWorked { get; set; }
+        public Guid ProjectId { get; set; }
+        public bool IsPublicHoliday { get; init; }
+        public string? HolidayName { get; init; }
+        public Dictionary<string, decimal> Overtime { get; } = new();
+    }
+
+    private List<PayrollPeriod> _periods = new();
+    private List<Employee> _employees = new();
+    private List<Project> _projects = new();
+    private List<Timesheet> _timesheets = new();
+    private List<string> _overtimeCategories = new();
+    private List<Row> _rows = new();
+
+    private Timesheet? _editing;
+    private Timesheet? _correcting;
+    private Guid _editingId;
+    private Guid _newEmployeeId;
+    private string _correctionReason = string.Empty;
+    private ValidationResult? _validation;
+    private Guid _companyId;
+
+    private Guid SelectedPeriodId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        _periods = Db.PayrollPeriods.AsNoTracking()
+            .Where(p => p.CompanyId == _companyId)
+            .OrderByDescending(p => p.StartDate).ToList();
+        _employees = Db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == _companyId && e.Status == EmployeeStatus.Active)
+            .OrderBy(e => e.LastName).ToList();
+        _projects = Db.Projects.AsNoTracking()
+            .Where(p => p.CompanyId == _companyId).OrderBy(p => p.Name).ToList();
+
+        // The categories offered are the ones that have a rule. Offering a category the engine
+        // cannot price would invite hours that can only be refused.
+        _overtimeCategories = Db.OvertimeRules.AsNoTracking()
+            .Where(r => r.IsActive)
+            .Select(r => r.CategoryCode)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToList();
+
+        if (_periods.Count > 0)
+        {
+            SelectedPeriodId = _periods[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (SelectedPeriodId == Guid.Empty)
+        {
+            return;
+        }
+
+        Db.ChangeTracker.Clear();
+        _timesheets = await TimesheetService.GetForPeriodAsync(SelectedPeriodId);
+        _editing = _timesheets.FirstOrDefault(t => t.Id == _editingId);
+        if (_editing is not null)
+        {
+            BuildRows(_editing);
+        }
+    }
+
+    private string EmployeeName(Guid employeeId) =>
+        _employees.FirstOrDefault(e => e.Id == employeeId)?.FullName ?? "Unknown";
+
+    private static string Tone(InputApprovalStatus status) => status switch
+    {
+        InputApprovalStatus.Approved or InputApprovalStatus.Locked => "verified",
+        InputApprovalStatus.Submitted => "supported",
+        InputApprovalStatus.Rejected or InputApprovalStatus.Returned => "unverified",
+        _ => "disabled"
+    };
+
+    private void Edit(Timesheet sheet)
+    {
+        _editing = sheet;
+        _editingId = sheet.Id;
+        BuildRows(sheet);
+    }
+
+    private void OpenCorrection(Timesheet sheet)
+    {
+        _correcting = sheet;
+        _correctionReason = string.Empty;
+    }
+
+    private void BuildRows(Timesheet sheet)
+    {
+        var holidays = Db.PublicHolidays.AsNoTracking()
+            .Where(h => h.IsActive && h.Date >= sheet.PeriodStart && h.Date <= sheet.PeriodEnd)
+            .ToList();
+
+        _rows = new List<Row>();
+        for (var date = sheet.PeriodStart; date <= sheet.PeriodEnd; date = date.AddDays(1))
+        {
+            var existing = sheet.Entries.FirstOrDefault(e => e.WorkDate == date);
+            var holiday = holidays.FirstOrDefault(h => h.Date == date);
+
+            var row = new Row
+            {
+                Date = date,
+                OrdinaryHours = existing?.OrdinaryHours ?? 0m,
+                DaysWorked = existing?.DaysWorked ?? 0m,
+                ProjectId = existing?.ProjectId ?? Guid.Empty,
+                IsPublicHoliday = holiday is not null,
+                HolidayName = holiday?.Name
+            };
+
+            foreach (var line in existing?.OvertimeLines ?? Enumerable.Empty<TimeEntryOvertimeLine>())
+            {
+                row.Overtime[line.OvertimeCategoryCode] = line.Hours;
+            }
+
+            _rows.Add(row);
+        }
+    }
+
+    private static void SetOvertime(Row row, string code, string? value)
+    {
+        row.Overtime[code] = decimal.TryParse(value, out var hours) ? hours : 0m;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_newEmployeeId == Guid.Empty)
+        {
+            _validation = ValidationResult.Success().Add("Employee", "Select an employee.");
+            return;
+        }
+
+        var result = await TimesheetService.CreateAsync(_newEmployeeId, SelectedPeriodId);
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _editingId = result.Value!.Id;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SaveEntriesAsync()
+    {
+        if (_editing is null)
+        {
+            return;
+        }
+
+        // Only days with something on them are sent: an empty row is not an assertion that the
+        // employee was absent, it is simply a day nobody has filled in.
+        var entries = _rows
+            .Where(r => r.OrdinaryHours != 0m || r.DaysWorked != 0m ||
+                        r.Overtime.Values.Any(v => v != 0m))
+            .Select(r => new TimeEntryRequest
+            {
+                WorkDate = r.Date,
+                OrdinaryHours = r.OrdinaryHours,
+                DaysWorked = r.DaysWorked,
+                ProjectId = r.ProjectId == Guid.Empty ? null : r.ProjectId,
+                Overtime = r.Overtime.Where(o => o.Value != 0m)
+                    .ToDictionary(o => o.Key, o => o.Value)
+            })
+            .ToList();
+
+        var result = await TimesheetService.SetEntriesAsync(_editing.Id, entries);
+        _validation = result.IsValid ? null : result;
+        await LoadAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_editing is null)
+        {
+            return;
+        }
+
+        await SaveEntriesAsync();
+        if (_validation is not null)
+        {
+            return;
+        }
+
+        var result = await TimesheetService.SubmitAsync(_editing.Id);
+        _validation = result.IsValid ? null : result;
+        if (result.IsValid)
+        {
+            _editing = null;
+            _editingId = Guid.Empty;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task CreateCorrectionAsync()
+    {
+        if (_correcting is null)
+        {
+            return;
+        }
+
+        var result = await TimesheetService.CreateCorrectionAsync(_correcting.Id, _correctionReason);
+        _validation = result.Succeeded ? null : result.Validation;
+        if (result.Succeeded)
+        {
+            _editingId = result.Value!.Id;
+            _correcting = null;
+        }
+
+        await LoadAsync();
+    }
+}

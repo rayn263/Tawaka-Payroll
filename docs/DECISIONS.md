@@ -297,3 +297,77 @@ authority is a later event and must keep working after the run is locked.
 touched. An unlocked run stays editable, which is what the Review stage is for. The guard reads the
 change tracker, so bulk `ExecuteUpdate`/`ExecuteDelete` operations would bypass it; none exist
 against payroll data, and any future one must check the lock itself.
+
+### ADR-031 — Time, leave and loans record quantities; the engine prices them
+**Status:** Accepted (Milestone 5)
+**Context:** A timesheet screen that multiplies hours by a rate is the easiest thing in the world to
+write, and it creates a second payroll engine — one with no trace, no rule versioning and no
+rounding policy. The same is true of a leave module that works out what an unpaid day costs.
+**Decision:** Timesheets, leave requests and loans record **quantities and approvals only**: hours,
+days, categories, instalments, who approved what and when. Every conversion into money happens in
+`TimeAndAbsenceCalculator`, inside the pure engine, from the snapshot. Overtime is priced by a dated
+`OvertimeRule`; a salary becomes a daily or hourly rate through a dated `PayDivisorRule`; an unpaid
+leave day is docked at that daily rate.
+**Consequences:** There is exactly one implementation of "what is an hour of Sunday overtime worth",
+and it is traced like every other figure. A category with no established multiplier leaves the
+figure unresolved rather than paying plain time. The one arithmetic that stays outside the engine is
+capping a loan deduction at the outstanding balance, which is a fact about the loan ledger rather
+than about pay — and the snapshot records the balance it was capped against so the deduction stays
+explicable.
+
+### ADR-032 — An unestablished leave entitlement is undetermined, not zero
+**Status:** Accepted (Milestone 5)
+**Context:** Zimbabwe's statutory leave entitlements come from the Labour Act and from NEC
+collective bargaining agreements, neither of which could be read from this environment. The
+tempting move is to ship "22 days annual leave" because that is what most people say.
+**Decision:** `LeaveType.EntitlementDays` is **nullable** and every seeded type has null, graded
+Unverified and tagged with compliance question Q32. `LeaveEntitlement.BalanceDays` is null whenever
+the entitlement is null, and the screens render "—". Days *taken* are always exact, because those
+come from approved requests rather than from a statute.
+**Consequences:** An employer sees "—" until they record their own entitlement with its source,
+which is a thing they can actually do. This is ADR-024 applied to leave: the same refusal to let an
+unknown quantity wear the clothes of a known one.
+
+### ADR-033 — Public holidays are captured data, never compiled-in
+**Status:** Accepted (Milestone 5)
+**Context:** Zimbabwe's public holidays are set by the Public Holidays and Prohibition of Business
+Act and by presidential proclamation, and the proclaimed dates move from year to year. A list
+compiled into the application would be wrong within a year, and wrong silently — payroll would pay
+holiday rates on a day that was not a holiday.
+**Decision:** `HolidayCalendar` and `PublicHoliday` are data. The seeder creates an **empty**
+default calendar and not one holiday. Each captured public holiday starts Unverified and carries a
+source; verifying one needs the same permission and the same citation as verifying a tax rule. A
+company holiday needs no external evidence, which is what `HolidayKind` distinguishes. Removing a
+holiday deactivates it rather than deleting it. A payroll run freezes the calendar identity and the
+holiday dates it used into its snapshot.
+**Consequences:** The calendar starts empty, which looks unhelpful and is honest. A completed run
+can always say which calendar told it a day was a holiday.
+
+### ADR-034 — A loan balance is the ledger, never a stored figure
+**Status:** Accepted (Milestone 5)
+**Context:** A stored balance beside a transaction ledger is two sources of truth for one number.
+They disagree eventually, and when they do nobody can say which is right — least of all the
+employee whose money it is.
+**Decision:** `EmployeeLoan` stores no balance. `Outstanding` is derived: advances plus interest
+less repayments, counting only rows that have not been reversed and excluding reversal rows
+themselves. A repayment above the outstanding balance is refused unless over-recovery has been
+approved for that loan, by a named person, with a reason. Reversals keep the original row.
+**Consequences:** The balance cannot drift. The rule that "a deduction may not exceed what is owed"
+has one place to live, and breaking it requires a deliberate, attributed act.
+
+### ADR-035 — The input snapshot is stored, hashed and sealed
+**Status:** Accepted (Milestone 5)
+**Context:** Milestone 3 made the snapshot immutable in memory, which was sufficient while its
+inputs were contracts and dated rules — both reproducible from history. Approved time, leave and a
+loan balance are not: recalculating September in March would find a smaller loan balance and
+produce a different, equally defensible figure.
+**Decision:** Every calculation serialises its snapshot to `PayrollInputSnapshots` with a SHA-256
+hash and a seal timestamp, and the approved inputs it consumed are also written relationally to
+`PayrollRunInputSources`. Reading a snapshot whose content no longer matches its hash throws rather
+than returning it. Serialisation is deterministic, and `Money` and `CurrencyCode` have explicit
+converters — without them the currency round-trips to nothing, which would be worse than not
+storing the snapshot at all.
+**Consequences:** A completed run reproduces against the inputs it actually had, and can name them.
+"Which runs consumed this timesheet?" is a query rather than an archaeology exercise. The cost is a
+JSON document per employee per run, which is cheap against the alternative of not being able to
+answer a dispute.

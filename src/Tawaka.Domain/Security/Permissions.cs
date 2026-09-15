@@ -34,6 +34,27 @@ public static class Permissions
     public const string StatutoryEditRules = "Statutory.EditRules";
     public const string StatutoryVerifyRules = "Statutory.VerifyRules";
 
+    public const string TimeView = "Time.View";
+    public const string TimeEdit = "Time.Edit";
+
+    /// <summary>Conflicts with <see cref="TimeEdit"/>: a person cannot approve their own capture.</summary>
+    public const string TimeApprove = "Time.Approve";
+
+    public const string LeaveView = "Leave.View";
+    public const string LeaveEdit = "Leave.Edit";
+    public const string LeaveApprove = "Leave.Approve";
+
+    public const string CalendarView = "Calendar.View";
+    public const string CalendarEdit = "Calendar.Edit";
+
+    public const string LoansView = "Loans.View";
+    public const string LoansEdit = "Loans.Edit";
+
+    /// <summary>Conflicts with <see cref="LoansEdit"/>: whoever raises a loan cannot approve it.</summary>
+    public const string LoansApprove = "Loans.Approve";
+
+    public const string LoansDisburse = "Loans.Disburse";
+
     public const string ReportsRun = "Reports.Run";
     public const string ReportsExport = "Reports.Export";
 
@@ -65,6 +86,18 @@ public static class Permissions
             (StatutoryRecordPayment, "Statutory", "Record payment of a statutory obligation", null),
             (StatutoryEditRules, "Statutory", "Create and edit statutory rules", null),
             (StatutoryVerifyRules, "Statutory", "Mark a statutory rule as verified", null),
+            (TimeView, "Time", "View timesheets and attendance", null),
+            (TimeEdit, "Time", "Capture and submit timesheets", TimeApprove),
+            (TimeApprove, "Time", "Approve timesheets", TimeEdit),
+            (LeaveView, "Leave", "View leave requests, entitlements and balances", null),
+            (LeaveEdit, "Leave", "Capture leave requests and adjust entitlements", LeaveApprove),
+            (LeaveApprove, "Leave", "Approve leave requests", LeaveEdit),
+            (CalendarView, "Calendar", "View the holiday calendar", null),
+            (CalendarEdit, "Calendar", "Edit the holiday calendar", null),
+            (LoansView, "Loans", "View loans and advances", null),
+            (LoansEdit, "Loans", "Create loans and record repayments", LoansApprove),
+            (LoansApprove, "Loans", "Approve loans and over-recovery", LoansEdit),
+            (LoansDisburse, "Loans", "Record a loan disbursement", null),
             (ReportsRun, "Reports", "Run reports", null),
             (ReportsExport, "Reports", "Export report data", null),
             (UsersManage, "Security", "Manage users, roles and permissions", null),

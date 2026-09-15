@@ -56,10 +56,9 @@ public class StatutoryObligationTests : EmployeeTestBase
 
         await VerifyAllRulesAsync(db);
 
-        var resolver = new StatutoryRuleResolver(new EfStatutoryRuleSource(db.Context));
-        var snapshots = new PayrollSnapshotBuilder(db.Context, resolver);
-        var obligations = new StatutoryObligationService(db.Context, db.User, db.Clock);
-        var runs = new PayrollRunService(db.Context, snapshots, obligations, db.User, db.Clock);
+        var services = PayrollServices.For(db);
+        var obligations = services.Obligations;
+        var runs = services.Runs;
 
         return new Fixture(db, companyId, employee, period, runs, obligations, permanentTypeId);
     }

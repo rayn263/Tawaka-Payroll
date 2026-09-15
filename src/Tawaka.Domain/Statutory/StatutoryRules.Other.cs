@@ -144,3 +144,78 @@ public class CurrencyTaxStrategyRule : StatutoryRule
 
     public string? AdvisorReference { get; set; }
 }
+
+/// <summary>
+/// The multiplier that applies to one category of overtime, as a dated and graded rule.
+/// <para>
+/// Overtime rates in Zimbabwe come from the Labour Act and from NEC collective bargaining
+/// agreements, which are Statutory Instruments. They are therefore statutory rules like any other:
+/// versioned, dated, sourced and graded. Nothing in this codebase assumes 1.5× — an unverified or
+/// missing overtime rule leaves the figure unresolved with its compliance question attached, the
+/// same as a missing PAYE table.
+/// </para>
+/// </summary>
+public class OvertimeRule : StatutoryRule
+{
+    public override StatutoryRuleType RuleType => StatutoryRuleType.Overtime;
+
+    /// <summary>Stable category code, e.g. "OT_WEEKDAY", "OT_SUNDAY", "OT_PUBLIC_HOLIDAY".</summary>
+    public string CategoryCode { get; set; } = string.Empty;
+
+    public string CategoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Multiple of the ordinary hourly rate. Nullable on purpose: a rule may exist, and be known to
+    /// exist, without its value having been read from an authoritative source. A null multiplier
+    /// refuses; it does not mean 1.0.
+    /// </summary>
+    public decimal? Multiplier { get; set; }
+
+    /// <summary>
+    /// Hours per period beyond which this category applies, where the rule is threshold-based.
+    /// Null where the category is defined by the day rather than by a threshold.
+    /// </summary>
+    public decimal? ThresholdHours { get; set; }
+
+    /// <summary>True where the category is taxable and NSSA treatment follows ordinary overtime.</summary>
+    public bool IsTaxable { get; set; } = true;
+
+    public bool IsNssaApplicable { get; set; }
+
+    /// <summary>The employment types this rate applies to, or null for all of them.</summary>
+    public string? EmploymentTypeCode { get; set; }
+
+    public bool HasUsableMultiplier => Multiplier is > 0m;
+}
+
+/// <summary>
+/// How a periodic salary converts into an hourly or daily rate.
+/// <para>
+/// This looks like arithmetic and is not. Dividing a monthly salary by "the number of working days
+/// in a month" requires a convention — 22 days? 26? 30? — and the answer changes what an employee
+/// loses for a day of unpaid leave and gains for an hour of overtime. In Zimbabwe the convention
+/// comes from the Labour Act and from NEC collective bargaining agreements, so it is a dated,
+/// sourced, graded rule like any other, and an unverified one blocks live payroll rather than
+/// quietly picking a divisor (Q33).
+/// </para>
+/// </summary>
+public class PayDivisorRule : StatutoryRule
+{
+    public override StatutoryRuleType RuleType => StatutoryRuleType.PayDivisor;
+
+    /// <summary>Which pay frequency this divisor converts from.</summary>
+    public PeriodBasis SalaryBasis { get; set; } = PeriodBasis.Monthly;
+
+    /// <summary>Working days in the period. Null means undetermined, not zero.</summary>
+    public decimal? DaysInPeriod { get; set; }
+
+    /// <summary>Ordinary working hours in the period. Null means undetermined, not zero.</summary>
+    public decimal? HoursInPeriod { get; set; }
+
+    /// <summary>The employment types this convention applies to, or null for all.</summary>
+    public string? EmploymentTypeCode { get; set; }
+
+    public bool HasDailyDivisor => DaysInPeriod is > 0m;
+
+    public bool HasHourlyDivisor => HoursInPeriod is > 0m;
+}

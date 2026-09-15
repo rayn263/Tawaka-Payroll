@@ -39,7 +39,33 @@ internal sealed class CalculationContext
         RecordRuleSnapshot();
     }
 
-    public PayrollInputSnapshot Snapshot { get; }
+    /// <summary>
+    /// The snapshot, with anything the engine derived from approved time, leave and loans folded
+    /// in. Stages after the first read this rather than the raw snapshot, so a derived overtime
+    /// line and a captured allowance are treated identically from that point on.
+    /// </summary>
+    public PayrollInputSnapshot Snapshot { get; private set; }
+
+    /// <summary>
+    /// Folds engine-derived earnings and deductions into the snapshot. This is the only mutation
+    /// of the snapshot anywhere, it happens in the first stage before any figure is computed, and
+    /// it produces a new record rather than editing the caller's — the snapshot the caller holds
+    /// is unchanged, which is what keeps it reproducible.
+    /// </summary>
+    public void AddDerivedInputs(
+        IReadOnlyList<EarningInput> earnings, IReadOnlyList<DeductionInput> deductions)
+    {
+        if (earnings.Count == 0 && deductions.Count == 0)
+        {
+            return;
+        }
+
+        Snapshot = Snapshot with
+        {
+            Earnings = Snapshot.Earnings.Concat(earnings).ToList(),
+            Deductions = Snapshot.Deductions.Concat(deductions).ToList()
+        };
+    }
 
     public CurrencyCode Currency => Snapshot.PayrollCurrency;
 
@@ -52,6 +78,20 @@ internal sealed class CalculationContext
     public IReadOnlyList<EmployerCostResult> EmployerCosts => _employerCosts;
 
     public bool HasUnresolved => _unresolved.Count > 0;
+
+    /// <summary>
+    /// True when a component of pay itself could not be produced — missing approved time, an
+    /// overtime rate that has not been established, a contract with no rate.
+    /// <para>
+    /// Gross earnings must then be absent rather than a total of the parts that happened to work.
+    /// A gross that silently excludes unpriced overtime is a wrong number presented as a right one,
+    /// which is precisely what this system exists not to do.
+    /// </para>
+    /// </summary>
+    public bool HasUnresolvedEarnings => _unresolved.Any(u =>
+        u.Code is UnresolvedCodes.TimesheetMissing or UnresolvedCodes.TimesheetNotApproved
+            or UnresolvedCodes.OvertimeMultiplierUnresolved or UnresolvedCodes.OvertimeRuleUnresolved
+            or UnresolvedCodes.RateMissing or UnresolvedCodes.CurrencyStrategyUnresolved);
 
     public Money? GrossEarnings { get; set; }
     public Money? TaxableIncome { get; set; }
@@ -159,6 +199,12 @@ internal sealed class CalculationContext
         Record("Apwcs", Snapshot.Rules.Apwcs);
         Record("BonusExemption", Snapshot.Rules.BonusExemption);
         Record("CurrencyStrategy", Snapshot.Rules.CurrencyStrategy);
+        Record("PayDivisor", Snapshot.Rules.PayDivisor);
+
+        foreach (var overtime in Snapshot.Rules.Overtime)
+        {
+            Record($"Overtime:{overtime.CategoryCode}", overtime);
+        }
 
         foreach (var credit in Snapshot.Rules.TaxCredits)
         {

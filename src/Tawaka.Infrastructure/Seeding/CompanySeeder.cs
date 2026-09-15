@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Domain.Companies;
+using Tawaka.Domain.Calendars;
 using Tawaka.Domain.Earnings;
+using Tawaka.Domain.Leave;
 using Tawaka.Domain.Employees;
 using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Statutory;
@@ -53,6 +55,8 @@ public sealed class CompanySeeder
         SeedEmploymentTypes(company);
         SeedEarningTypes(company);
         SeedDeductionTypes(company);
+        SeedLeaveTypes(company);
+        SeedHolidayCalendar(company);
 
         await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return company;
@@ -227,6 +231,92 @@ public sealed class CompanySeeder
                 IsActive = true
             });
         }
+    }
+
+    /// <summary>
+    /// The leave types a Zimbabwean employer normally operates, with their entitlements left
+    /// <b>undetermined</b>.
+    /// <para>
+    /// Annual, sick, maternity and compassionate leave entitlements are set by the Labour Act and,
+    /// for many employers, by a NEC collective bargaining agreement. Neither could be read from an
+    /// authoritative source, so <c>EntitlementDays</c> is null on every type: null means the
+    /// entitlement has not been established, which is a different thing from zero days, and the
+    /// balance screen must say "—" rather than a number nobody has checked (spec Q32).
+    /// </para>
+    /// <para>
+    /// The paid/unpaid flag is different: it is the company's own configuration, it is the only
+    /// property payroll reads, and leaving it undetermined would stop leave working at all. Each
+    /// is set to the ordinary expectation and is editable.
+    /// </para>
+    /// </summary>
+    private void SeedLeaveTypes(Company company)
+    {
+        var types = new (string Code, string Name, bool Paid, LeaveAccrualBasis Basis, string Note)[]
+        {
+            ("ANNUAL", "Annual leave", true, LeaveAccrualBasis.Monthly,
+                "Entitlement set by the Labour Act and any applicable NEC agreement. Not established (Q32)."),
+            ("SICK", "Sick leave", true, LeaveAccrualBasis.AnnualGrant,
+                "The Labour Act provides for sick leave on a sliding scale of full and half pay. " +
+                "Neither the periods nor the half-pay treatment could be verified (Q32)."),
+            ("MATERNITY", "Maternity leave", true, LeaveAccrualBasis.NotTracked,
+                "Duration, service qualification and pay treatment not established (Q32)."),
+            ("COMPASSIONATE", "Compassionate leave", true, LeaveAccrualBasis.AnnualGrant,
+                "Usually granted from the sick leave entitlement. Not established (Q32)."),
+            ("UNPAID", "Unpaid leave", false, LeaveAccrualBasis.NotTracked,
+                "Unpaid absence. Reduces pay by the daily rate, which needs the divisor rule (Q33)."),
+            ("STUDY", "Study leave", false, LeaveAccrualBasis.NotTracked,
+                "Company policy. No statutory basis assumed.")
+        };
+
+        var order = 1;
+        foreach (var type in types)
+        {
+            _context.LeaveTypes.Add(new LeaveType
+            {
+                CompanyId = company.Id,
+                Code = type.Code,
+                Name = type.Name,
+                IsPaid = type.Paid,
+                AccrualBasis = type.Basis,
+
+                // Null, deliberately. An unestablished entitlement is not zero days.
+                EntitlementDays = null,
+                StatutoryEntitlementDays = null,
+                EntitlementVerificationStatus = VerificationStatus.Unverified,
+                EntitlementSource = null,
+                ComplianceQuestion = type.Code is "ANNUAL" or "SICK" or "MATERNITY" or "COMPASSIONATE"
+                    ? "Q32"
+                    : null,
+                Description = type.Note,
+                RequiresApproval = true,
+                IsActive = true,
+                SortOrder = order++
+            });
+        }
+    }
+
+    /// <summary>
+    /// An empty default calendar.
+    /// <para>
+    /// No public holiday is seeded. Zimbabwe's holidays are set by Act and by presidential
+    /// proclamation and move from year to year; shipping a list would be silently wrong within a
+    /// year, and payroll would pay holiday rates on a day that was not one. The calendar exists so
+    /// holidays can be captured with their proclamation; it starts empty on purpose (ADR-033).
+    /// </para>
+    /// </summary>
+    private void SeedHolidayCalendar(Company company)
+    {
+        _context.HolidayCalendars.Add(new HolidayCalendar
+        {
+            CompanyId = company.Id,
+            Code = "DEFAULT",
+            Name = "Company calendar",
+            EffectiveFrom = new DateOnly(2026, 1, 1),
+            IsDefault = true,
+            IsActive = true,
+            Notes = "Empty by design. Capture each public holiday with the proclamation or Act it " +
+                    "comes from; nothing here is shipped as a known date."
+        });
     }
 
     private void SeedDeductionTypes(Company company)
