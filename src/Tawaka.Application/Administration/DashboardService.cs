@@ -85,57 +85,74 @@ public sealed class DashboardService
         _directory = directory;
     }
 
-    public async Task<DashboardData> BuildAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The position of one company.
+    /// <para>
+    /// Every query here is scoped to that company. Tawaka is installed one company per database
+    /// and has no multi-company screen, but a dashboard that counted whatever rows it found would
+    /// be wrong the moment a second company existed — and it would disclose it.
+    /// </para>
+    /// </summary>
+    public async Task<DashboardData> BuildAsync(
+        Guid companyId, CancellationToken cancellationToken = default)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         var readiness = await _readiness.EvaluateAsync(cancellationToken).ConfigureAwait(false);
 
         var company = await _context.Companies.AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            .FirstOrDefaultAsync(c => c.Id == companyId, cancellationToken).ConfigureAwait(false);
 
         var employees = await _context.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == companyId)
             .Select(e => new { e.Id, e.Status })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
         var contracts = await _context.EmployeeContracts.AsNoTracking()
-            .Where(c => c.IsCurrent)
+            .Where(c => c.CompanyId == companyId && c.IsCurrent)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
         // The period in force today, or the most recent one if today falls outside every period.
         var currentPeriod = await _context.PayrollPeriods.AsNoTracking()
-            .Where(p => p.StartDate <= today && p.EndDate >= today)
+            .Where(p => p.CompanyId == companyId && p.StartDate <= today && p.EndDate >= today)
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
             ?? await _context.PayrollPeriods.AsNoTracking()
+                .Where(p => p.CompanyId == companyId)
                 .OrderByDescending(p => p.StartDate)
                 .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         var latestRun = await _context.PayrollRuns.AsNoTracking()
             .Include(r => r.PayrollPeriod)
+            .Where(r => r.CompanyId == companyId)
             .OrderByDescending(r => r.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         var runsAwaitingApproval = await _context.PayrollRuns.AsNoTracking()
-            .CountAsync(r => r.Status == PayrollRunStatus.Review, cancellationToken)
+            .CountAsync(r => r.CompanyId == companyId && r.Status == PayrollRunStatus.Review,
+                cancellationToken)
             .ConfigureAwait(false);
 
         var runsLocked = await _context.PayrollRuns.AsNoTracking()
-            .CountAsync(r => r.Status == PayrollRunStatus.Locked, cancellationToken)
+            .CountAsync(r => r.CompanyId == companyId && r.Status == PayrollRunStatus.Locked,
+                cancellationToken)
             .ConfigureAwait(false);
 
         var timesheetsPending = await _context.Timesheets.AsNoTracking()
-            .CountAsync(t => t.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
+            .CountAsync(t => t.CompanyId == companyId &&
+                             t.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
             .ConfigureAwait(false);
 
         var leavePending = await _context.LeaveRequests.AsNoTracking()
-            .CountAsync(r => r.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
+            .CountAsync(r => r.CompanyId == companyId &&
+                             r.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
             .ConfigureAwait(false);
 
         var loansPending = await _context.EmployeeLoans.AsNoTracking()
-            .CountAsync(l => l.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
+            .CountAsync(l => l.CompanyId == companyId &&
+                             l.ApprovalStatus == InputApprovalStatus.Submitted, cancellationToken)
             .ConfigureAwait(false);
 
         // Inputs that exist for the current period but are not yet approved: these are exactly the
@@ -143,14 +160,15 @@ public sealed class DashboardService
         var unapprovedInPeriod = currentPeriod is null
             ? 0
             : await _context.Timesheets.AsNoTracking()
-                .CountAsync(t => t.PayrollPeriodId == currentPeriod.Id &&
+                .CountAsync(t => t.CompanyId == companyId &&
+                                 t.PayrollPeriodId == currentPeriod.Id &&
                                  t.ApprovalStatus != InputApprovalStatus.Approved &&
                                  t.ApprovalStatus != InputApprovalStatus.Locked, cancellationToken)
                 .ConfigureAwait(false);
 
         var obligations = await _context.StatutoryObligations.AsNoTracking()
             .Include(o => o.Payments)
-            .Where(o => o.IsApproved || o.IsCalculated)
+            .Where(o => o.CompanyId == companyId && (o.IsApproved || o.IsCalculated))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -167,6 +185,7 @@ public sealed class DashboardService
 
         var runs = await _context.PayrollRuns.AsNoTracking()
             .Include(r => r.PayrollPeriod)
+            .Where(r => r.CompanyId == companyId)
             .OrderByDescending(r => r.CreatedAt)
             .Take(8)
             .ToListAsync(cancellationToken)
@@ -204,7 +223,10 @@ public sealed class DashboardService
             EmployeesTotal = employees.Count,
             EmployeesActive = employees.Count(e => e.Status == EmployeeStatus.Active),
             ProjectsActive = await _context.Projects.AsNoTracking()
-                .CountAsync(p => p.Status == Domain.Organisation.ProjectStatus.Active, cancellationToken)
+                .CountAsync(
+                    p => p.CompanyId == companyId &&
+                         p.Status == Domain.Organisation.ProjectStatus.Active,
+                    cancellationToken)
                 .ConfigureAwait(false),
             CurrentPeriod = currentPeriod,
             LatestRun = latestRun,

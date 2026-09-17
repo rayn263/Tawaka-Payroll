@@ -16,7 +16,7 @@ public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<Payrol
         builder.Property(p => p.LockedBy).HasMaxLength(100);
         builder.Property(p => p.CreatedBy).HasMaxLength(100);
         builder.Property(p => p.ModifiedBy).HasMaxLength(100);
-        builder.HasIndex(p => p.Code).IsUnique();
+        builder.HasIndex(p => new { p.CompanyId, p.Code }).IsUnique();
     }
 }
 

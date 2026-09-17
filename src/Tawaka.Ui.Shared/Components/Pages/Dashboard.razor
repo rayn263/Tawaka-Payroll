@@ -3,6 +3,8 @@
 @using Tawaka.Application.Administration
 @using Tawaka.Application.Release
 @inject DashboardService DashboardSource
+@inject PayrollDbContext Db
+@inject UserSession Session
 
 @* Every figure here is computed from the database. There is no sample or placeholder number
    anywhere: a dashboard showing a plausible figure nobody computed is worse than an empty one,
@@ -237,7 +239,14 @@ else
 @code {
     private DashboardData? _data;
 
-    protected override async Task OnInitializedAsync() => _data = await DashboardSource.BuildAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // The signed-in user's company, falling back to the one this installation holds.
+        var companyId = Session.CompanyId
+                        ?? Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+
+        _data = await DashboardSource.BuildAsync(companyId);
+    }
 
     private static string Css(ReleaseStage stage) => stage switch
     {
