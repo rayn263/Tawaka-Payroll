@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tawaka.Application.Tests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tawaka.Infrastructure.Tests", "tests\Tawaka.Infrastructure.Tests\Tawaka.Infrastructure.Tests.csproj", "{7B301B7F-F5DE-4DB5-8861-E670E9B661D4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tawaka.Ui.Tests", "tests\Tawaka.Ui.Tests\Tawaka.Ui.Tests.csproj", "{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -81,6 +83,10 @@ Global
 		{7B301B7F-F5DE-4DB5-8861-E670E9B661D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B301B7F-F5DE-4DB5-8861-E670E9B661D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B301B7F-F5DE-4DB5-8861-E670E9B661D4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,5 +103,6 @@ Global
 		{EB4DB1BA-FD65-4073-9536-5AA947D9F4B6} = {1C34C7C4-4474-4056-AD45-36E90F45A828}
 		{009580B2-EB6B-4FEC-B736-9D9514EBABCE} = {1C34C7C4-4474-4056-AD45-36E90F45A828}
 		{7B301B7F-F5DE-4DB5-8861-E670E9B661D4} = {1C34C7C4-4474-4056-AD45-36E90F45A828}
+		{09FB50DC-E2A6-4CFB-A240-A8AC7DACAF64} = {1C34C7C4-4474-4056-AD45-36E90F45A828}
 	EndGlobalSection
 EndGlobal

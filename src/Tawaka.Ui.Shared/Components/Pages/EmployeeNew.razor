@@ -215,15 +215,10 @@
                 ? null
                 : DateOnly.FromDateTime(_dateOfBirth.Value);
 
-            var created = await EmployeeService.CreateAsync(_employee);
-            if (!created.Succeeded)
-            {
-                _validation = created.Validation;
-                return;
-            }
-
+            // The employee's identity is assigned by the domain, not by the database, so the
+            // contract can be completed and checked before anything is written.
             _contract.CompanyId = _companyId;
-            _contract.EmployeeId = created.Value!.Id;
+            _contract.EmployeeId = _employee.Id;
             _contract.StartDate = _employee.HireDate;
             _contract.EndDate = _contractEndDate is null
                 ? null
@@ -236,6 +231,22 @@
             _contract.LocationId = Guid.TryParse(_locationId, out var locationId) ? locationId : null;
             _contract.ProjectId = Guid.TryParse(_projectId, out var projectId) ? projectId : null;
 
+            // Both halves are checked before either is saved. An employee written without their
+            // contract cannot be finished later: the second attempt is refused as a duplicate.
+            var contractValidation = await ContractService.ValidateInitialAsync(_contract);
+            if (!contractValidation.IsValid)
+            {
+                _validation = contractValidation;
+                return;
+            }
+
+            var created = await EmployeeService.CreateAsync(_employee);
+            if (!created.Succeeded)
+            {
+                _validation = created.Validation;
+                return;
+            }
+
             var contract = await ContractService.CreateInitialAsync(_contract);
             if (!contract.Succeeded)
             {
@@ -243,7 +254,7 @@
                 return;
             }
 
-            Nav.NavigateTo($"employees/{created.Value.Id}");
+            Nav.NavigateTo($"employees/{created.Value!.Id}");
         }
         finally
         {

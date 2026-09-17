@@ -28,7 +28,17 @@ public sealed class EmployeeContractService
     }
 
     /// <summary>Creates the first contract for an employee.</summary>
-    public async Task<OperationResult<EmployeeContract>> CreateInitialAsync(
+    /// <summary>
+    /// Validates a first contract without writing anything.
+    /// <para>
+    /// A new employee and their first contract are entered on one screen but written by two
+    /// services. Without this, an employee whose contract fails validation is already saved, and
+    /// the officer correcting the mistake is told the employee number is already in use — leaving
+    /// a person on the payroll with no terms of employment and no way to finish the record.
+    /// Validating the contract first means nothing is written unless both halves are sound.
+    /// </para>
+    /// </summary>
+    public async Task<ValidationResult> ValidateInitialAsync(
         EmployeeContract contract, CancellationToken cancellationToken = default)
     {
         _currentUser.Require(Permissions.EmployeesEditSalary);
@@ -42,6 +52,16 @@ public sealed class EmployeeContractService
             "This employee already has a contract. Use a supersede to change the terms.");
 
         await ValidateReferencesAsync(contract, validation, cancellationToken).ConfigureAwait(false);
+
+        return validation;
+    }
+
+    public async Task<OperationResult<EmployeeContract>> CreateInitialAsync(
+        EmployeeContract contract, CancellationToken cancellationToken = default)
+    {
+        _currentUser.Require(Permissions.EmployeesEditSalary);
+
+        var validation = await ValidateInitialAsync(contract, cancellationToken).ConfigureAwait(false);
 
         if (!validation.IsValid)
         {

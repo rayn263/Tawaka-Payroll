@@ -1,3 +1,4 @@
+using AngleSharp.Dom;
 using Bunit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,6 +69,47 @@ public abstract class UiTestHost : TestContext
             Roles: new[] { role },
             Permissions: permissions.ToHashSet(StringComparer.OrdinalIgnoreCase),
             MustChangePassword: false));
+
+    /// <summary>
+    /// The form control sitting under a given label.
+    /// <para>
+    /// Found by its label rather than by position, so a test says what a person filling the form
+    /// in would say — "Employee number" — and does not quietly start filling in a different box
+    /// when a field is added above it.
+    /// </para>
+    /// </summary>
+    protected static IElement Field(IRenderedFragment page, string label)
+    {
+        foreach (var cell in page.FindAll("div"))
+        {
+            var caption = cell.QuerySelector("label");
+            if (caption is null)
+            {
+                continue;
+            }
+
+            var text = caption.TextContent.Trim().TrimEnd('*').Trim();
+            if (!text.Equals(label, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var control = cell.QuerySelector("input, select, textarea");
+            if (control is not null)
+            {
+                return control;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"The rendered page has no form control labelled '{label}'.");
+    }
+
+    /// <summary>The button whose caption is exactly this text.</summary>
+    protected static IElement Button(IRenderedFragment page, string caption) =>
+        page.FindAll("button").FirstOrDefault(
+            b => b.TextContent.Trim().Equals(caption, StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException($"The rendered page has no '{caption}' button.");
 
     protected override void Dispose(bool disposing)
     {
