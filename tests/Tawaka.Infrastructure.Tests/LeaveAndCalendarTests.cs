@@ -319,7 +319,7 @@ public class LeaveAndCalendarTests : EmployeeTestBase
             .BuildAsync(fixture.Employee.Id, fixture.Period, PayrollMode.Development);
         var result = new Tawaka.Payroll.Engine.PayrollCalculator().Calculate(snapshot!);
 
-        Assert.Single(snapshot.LeaveEffects);
+        Assert.Single(snapshot!.LeaveEffects);
         Assert.DoesNotContain(result.Deductions, d => d.Code == "UNPAID_LEAVE");
     }
 
