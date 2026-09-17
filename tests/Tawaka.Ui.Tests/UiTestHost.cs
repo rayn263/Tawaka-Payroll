@@ -62,7 +62,7 @@ public abstract class UiTestHost : TestContext
     /// </summary>
     protected void SignIn(string fullName, string role, params string[] permissions) =>
         Session.SignIn(new AuthenticatedUser(
-            UserId: Guid.NewGuid(),
+            UserId: IdentityOf(fullName),
             Username: fullName.Replace(" ", ".").ToLowerInvariant(),
             FullName: fullName,
             CompanyId: CompanyId,
@@ -110,6 +110,15 @@ public abstract class UiTestHost : TestContext
         page.FindAll("button").FirstOrDefault(
             b => b.TextContent.Trim().Equals(caption, StringComparison.OrdinalIgnoreCase))
         ?? throw new InvalidOperationException($"The rendered page has no '{caption}' button.");
+
+    /// <summary>
+    /// The same person always has the same identity, across sign-outs and sign-ins. Segregation of
+    /// duties turns on who someone is, so a test that signs the same person back in under a fresh
+    /// identity would quietly stop testing it.
+    /// </summary>
+    private static Guid IdentityOf(string fullName) =>
+        new(System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes(fullName)));
 
     protected override void Dispose(bool disposing)
     {
