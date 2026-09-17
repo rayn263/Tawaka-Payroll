@@ -230,7 +230,7 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
 14. **The Windows desktop host has never been compiled or run.** This is the single largest
     unverified area in the release. `Tawaka.Ui.Shared` compiles and is type-checked on every
     build, so the screens' C# is sound, but no window has been opened, no form submitted and no
-    page printed. `WINDOWS-BUILD.md` lists exactly what a first Windows run must establish.
+    page printed. `docs/WINDOWS_VALIDATION.md` lists exactly what a first Windows run must establish.
 15. **Report export is CSV only** (ADR-039). Excel and a direct PDF writer are deliberate
     omissions rather than gaps: payslips and reports print to A4 through the browser's print
     dialogue, which also produces a PDF.

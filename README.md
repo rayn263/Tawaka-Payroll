@@ -14,7 +14,8 @@ A professional, Windows-based payroll management system for businesses operating
 > somebody with access to those documents: see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26.
 >
 > **The Windows desktop host has never been compiled or run.** The screens compile and are
-> type-checked on every build; none has been rendered. See `WINDOWS-BUILD.md`.
+> type-checked on every build, and every one is rendered headlessly by `tests/Tawaka.Ui.Tests`;
+> none has been rendered on Windows. See `docs/WINDOWS_VALIDATION.md`.
 
 ## Quick start
 
@@ -69,8 +70,9 @@ It is built around four non-negotiable principles:
 | [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, verification status, per-rule confidence, compliance risks |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | **Where the project actually is**: phase, milestone, architecture as built, database version, rules implemented and verified, known issues, next milestone |
 | [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **Installing, running, verifying rules, running a payroll, backup and restore** |
-| [`WINDOWS-BUILD.md`](WINDOWS-BUILD.md) | Building and running the Windows desktop host, and what a first Windows run must establish |
+| [`RELEASE_GUIDE.md`](RELEASE_GUIDE.md) | **The one guide: installing, first run, company and employee setup, payroll, approvals, payslips, obligations, reports, backup, restore, corrections, locking, audit, troubleshooting** |
+| [`docs/COMPLIANCE_STATUS.md`](docs/COMPLIANCE_STATUS.md) | Where every open compliance question stands, and what would answer it |
+| [`docs/WINDOWS_VALIDATION.md`](docs/WINDOWS_VALIDATION.md) | The Windows validation that has **not** been performed, and exactly how to perform it |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision record (ADR) log |
 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business before or during development |
