@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Tawaka.Application.Security;
 using Tawaka.Domain.Security;
@@ -183,7 +182,7 @@ public sealed class SecuritySeeder
             return new SecuritySeedResult(false, null);
         }
 
-        var password = GeneratePassword();
+        var password = GeneratedPassword.Create();
         var user = new User
         {
             CompanyId = companyId,
@@ -203,40 +202,5 @@ public sealed class SecuritySeeder
 
         await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return new SecuritySeedResult(true, password);
-    }
-
-    /// <summary>
-    /// A random initial password that satisfies the default policy. Returned to the caller once,
-    /// then only its hash survives.
-    /// </summary>
-    private static string GeneratePassword()
-    {
-        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        const string lower = "abcdefghijkmnopqrstuvwxyz";
-        const string digits = "23456789";
-        const string all = upper + lower + digits;
-
-        var characters = new List<char>
-        {
-            Pick(upper),
-            Pick(lower),
-            Pick(digits)
-        };
-
-        while (characters.Count < 16)
-        {
-            characters.Add(Pick(all));
-        }
-
-        // Shuffle so the guaranteed classes are not always in the same positions.
-        for (var i = characters.Count - 1; i > 0; i--)
-        {
-            var j = RandomNumberGenerator.GetInt32(i + 1);
-            (characters[i], characters[j]) = (characters[j], characters[i]);
-        }
-
-        return new string(characters.ToArray());
-
-        static char Pick(string source) => source[RandomNumberGenerator.GetInt32(source.Length)];
     }
 }

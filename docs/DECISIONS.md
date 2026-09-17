@@ -446,3 +446,27 @@ and a database written by an earlier build is still read correctly by the fallba
 database rather than after loading the table. The regression guard is `Tawaka.Ui.Tests`, which
 renders every route: if a future query reintroduces an unorderable column, a test fails rather than
 a payroll officer's screen.
+
+### ADR-041 — A business creates its own users
+**Status:** Accepted (Final QA)
+**Context:** Final QA's code review found that the Administration screen listed users read-only and
+that nothing in the application — no service, no screen — could create one. An installation
+therefore held exactly one account: the administrator generated at first run. Approval refuses
+whoever calculated the run, timesheet approval refuses whoever captured it and loan approval
+refuses whoever raised it, so a single-account installation can produce a development calculation
+and nothing else: no approval, no finalisation, no statutory obligations, no payment. The control
+model the whole product is built on was unreachable.
+**Decision:** `UserAdministrationService` creates users, sets their roles, resets passwords,
+disables and re-enables accounts and clears lockouts, all behind `Users.Manage`, and the
+Administration screen exposes it. Every account is created with a generated password shown once
+and `MustChangePassword` set, so the administrator creating an account never knows the password the
+user ends up with. Segregation of duties is checked across the *union* of a user's roles, not only
+within one role: two roles that are each permissible would otherwise combine into the set neither
+is allowed to hold. A user is never deleted — their name is on payrolls they calculated and
+approvals they gave — only disabled. The last active account that can manage users cannot be
+disabled or have that permission taken away, and nobody can disable their own account.
+**Consequences:** A business can set itself up: an officer, a manager, a viewer, each with their
+own account. Editing the permissions *of a role* is still not exposed — `RoleService` remains
+reachable only from tests — so the four seeded roles are what an installation has. That is recorded
+as a known limitation rather than closed here, because the scope of this milestone is validation
+and defect repair.

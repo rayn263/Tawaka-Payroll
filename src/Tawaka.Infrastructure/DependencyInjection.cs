@@ -60,6 +60,7 @@ public static class DependencyInjection
 
         services.AddScoped<AuthenticationService>();
         services.AddScoped<RoleService>();
+        services.AddScoped<UserAdministrationService>();
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeContractService>();
         services.AddScoped<TimesheetService>();

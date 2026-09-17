@@ -5,6 +5,7 @@
 @using Tawaka.Domain.Audit
 @inject PayrollDbContext Db
 @inject AuditQueryService Audit
+@inject UserAdministrationService UserAdmin
 @inject UserSession Session
 @inject NavigationManager Nav
 
@@ -129,12 +130,31 @@
 
 @if (_tab == "users" && Session.HasPermission(Permissions.UsersManage))
 {
+    <ValidationSummaryPanel Result="_validation" />
+
+    @if (_issued is not null)
+    {
+        <div class="card">
+            <h2>Password for @_issued.Username</h2>
+            <div class="alert alert-warning">
+                <strong>@_issued.Password</strong>
+                <p>
+                    Write this down and give it to @_issued.Username now. It is not stored anywhere
+                    and cannot be shown again. They will be asked to change it when they sign in.
+                </p>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-quiet" @onclick="() => _issued = null">Done</button>
+            </div>
+        </div>
+    }
+
     <div class="card">
         <h2>Users</h2>
         <table class="data">
             <thead>
             <tr><th>Username</th><th>Name</th><th>Roles</th><th>Status</th>
-                <th>Last sign-in</th><th>Password</th></tr>
+                <th>Last sign-in</th><th>Password</th><th></th></tr>
             </thead>
             <tbody>
             @foreach (var user in _users)
@@ -142,11 +162,11 @@
                 <tr>
                     <td class="mono">@user.Username</td>
                     <td class="strong">@user.FullName</td>
-                    <td>@string.Join(", ", RolesOf(user.Id))</td>
+                    <td>@string.Join(", ", user.Roles)</td>
                     <td>
                         <StatusBadge Label="@(user.IsActive ? "Active" : "Disabled")"
                                      Tone="@(user.IsActive ? "verified" : "disabled")" />
-                        @if (user.LockedUntil is { } until && until > DateTimeOffset.UtcNow)
+                        @if (user.LockedUntil is { } until && until > DateTimeOffset.Now)
                         {
                             <span class="badge unverified">locked until @until.ToString("HH:mm")</span>
                         }
@@ -162,13 +182,70 @@
                             <span class="muted">set</span>
                         }
                     </td>
+                    <td>
+                        <button class="btn btn-quiet"
+                                @onclick="() => ResetPasswordAsync(user.Id)">Reset password</button>
+
+                        @if (user.LockedUntil is { } locked && locked > DateTimeOffset.Now)
+                        {
+                            <button class="btn btn-quiet"
+                                    @onclick="() => UnlockAsync(user.Id)">Unlock</button>
+                        }
+
+                        @if (user.IsActive)
+                        {
+                            <button class="btn btn-quiet"
+                                    @onclick="() => SetActiveAsync(user.Id, false)">Disable</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-quiet"
+                                    @onclick="() => SetActiveAsync(user.Id, true)">Enable</button>
+                        }
+                    </td>
                 </tr>
             }
             </tbody>
         </table>
         <p class="muted small">
             Passwords are stored as PBKDF2-HMAC-SHA256 hashes with a per-user salt. No password is
-            recoverable from this database, including the first administrator's.
+            recoverable from this database, including the first administrator's. A user is never
+            deleted — their name is on the payrolls they calculated and the approvals they gave —
+            so an account that should no longer be used is disabled.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>Add a user</h2>
+        <p class="muted">
+            Payroll here needs more than one person: whoever calculates a run cannot approve it,
+            whoever captures a timesheet cannot approve it, and whoever raises a loan cannot approve
+            it. Give each person their own account.
+        </p>
+        <div class="form-grid">
+            <div><label>Username *</label><input @bind="_newUsername" /></div>
+            <div><label>Full name *</label><input @bind="_newFullName" /></div>
+            <div><label>Email</label><input @bind="_newEmail" /></div>
+        </div>
+        <div class="checkbox-list">
+            @foreach (var role in _roles)
+            {
+                <label class="checkbox">
+                    <input type="checkbox"
+                           checked="@_newRoleIds.Contains(role.Id)"
+                           @onchange="e => ToggleRole(role.Id, e)" />
+                    <span class="strong">@role.Name</span>
+                    <span class="muted small">@role.Description</span>
+                </label>
+            }
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_busy">Create user</button>
+        </div>
+        <p class="muted small">
+            The new account is given a generated password, shown once, which the user must change
+            when they first sign in. Nobody — not even the administrator creating the account —
+            keeps a copy.
         </p>
     </div>
 
@@ -191,8 +268,9 @@
         </table>
         <p class="muted small">
             Conflicting permissions cannot be held by one role: calculating and approving payroll,
-            capturing and approving time, raising and approving a loan. The check is enforced when a
-            role is saved, not merely documented.
+            capturing and approving time, raising and approving a loan. The same applies to one
+            person holding two roles, so a user cannot be given a combination that no single role
+            is allowed.
         </p>
     </div>
 }
@@ -202,11 +280,18 @@
 
     private string _tab = "audit";
     private List<AuditEntryView> _entries = new();
-    private List<User> _users = new();
+    private IReadOnlyList<UserSummary> _users = Array.Empty<UserSummary>();
     private List<Role> _roles = new();
     private List<string> _entityNames = new();
-    private Dictionary<Guid, List<string>> _userRoles = new();
     private Dictionary<Guid, int> _rolePermissionCounts = new();
+
+    private string _newUsername = string.Empty;
+    private string _newFullName = string.Empty;
+    private string _newEmail = string.Empty;
+    private readonly List<Guid> _newRoleIds = new();
+    private ValidationResult? _validation;
+    private UserCredential? _issued;
+    private bool _busy;
 
     private DateTime? _from = DateTime.Today.AddDays(-30);
     private DateTime? _to = DateTime.Today;
@@ -220,20 +305,15 @@
         var requested = Tab?.ToLowerInvariant();
         _tab = requested is "users" ? "users" : "audit";
 
-        _users = Db.Users.AsNoTracking().OrderBy(u => u.Username).ToList();
-        _roles = Db.Roles.AsNoTracking().OrderBy(r => r.Name).ToList();
-
-        _userRoles = Db.UserRoles.AsNoTracking()
-            .Join(Db.Roles.AsNoTracking(), ur => ur.RoleId, r => r.Id,
-                (ur, r) => new { ur.UserId, r.Name })
-            .ToList()
-            .GroupBy(x => x.UserId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.Name).ToList());
-
         _rolePermissionCounts = Db.RolePermissions.AsNoTracking()
             .ToList()
             .GroupBy(rp => rp.RoleId)
             .ToDictionary(g => g.Key, g => g.Count());
+
+        if (_tab == "users" && Session.HasPermission(Permissions.UsersManage))
+        {
+            await LoadUsersAsync();
+        }
 
         if (_tab == "audit" && Session.HasPermission(Permissions.AuditView))
         {
@@ -248,8 +328,88 @@
         Nav.NavigateTo($"administration/{tab}", forceLoad: false, replace: true);
     }
 
-    private IEnumerable<string> RolesOf(Guid userId) =>
-        _userRoles.TryGetValue(userId, out var roles) ? roles : Enumerable.Empty<string>();
+    private async Task LoadUsersAsync()
+    {
+        _users = await UserAdmin.GetUsersAsync();
+        _roles = await UserAdmin.GetRolesAsync();
+    }
+
+    private void ToggleRole(Guid roleId, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+        {
+            if (!_newRoleIds.Contains(roleId))
+            {
+                _newRoleIds.Add(roleId);
+            }
+        }
+        else
+        {
+            _newRoleIds.Remove(roleId);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _validation = null;
+
+        try
+        {
+            var result = await UserAdmin.CreateAsync(new CreateUserCommand
+            {
+                Username = _newUsername,
+                FullName = _newFullName,
+                Email = _newEmail,
+                CompanyId = Session.CompanyId,
+                RoleIds = _newRoleIds.ToList()
+            });
+
+            if (!result.Succeeded)
+            {
+                _validation = result.Validation;
+                return;
+            }
+
+            _issued = result.Value;
+            _newUsername = _newFullName = _newEmail = string.Empty;
+            _newRoleIds.Clear();
+            await LoadUsersAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetPasswordAsync(Guid userId)
+    {
+        _validation = null;
+        var result = await UserAdmin.ResetPasswordAsync(userId);
+
+        if (!result.Succeeded)
+        {
+            _validation = result.Validation;
+            return;
+        }
+
+        _issued = result.Value;
+        await LoadUsersAsync();
+    }
+
+    private async Task SetActiveAsync(Guid userId, bool isActive)
+    {
+        var validation = await UserAdmin.SetActiveAsync(userId, isActive);
+        _validation = validation.IsValid ? null : validation;
+        await LoadUsersAsync();
+    }
+
+    private async Task UnlockAsync(Guid userId)
+    {
+        var validation = await UserAdmin.UnlockAsync(userId);
+        _validation = validation.IsValid ? null : validation;
+        await LoadUsersAsync();
+    }
 
     private async Task LoadAsync()
     {
