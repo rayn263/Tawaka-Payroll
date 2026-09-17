@@ -202,5 +202,23 @@ public class PayrollDbContext : DbContext, IPayrollDataContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PayrollDbContext).Assembly);
+
+        // Applied to every timestamp in the schema rather than to a chosen few: a column this
+        // converter misses is a column the database cannot order by, and that failure surfaces
+        // only when someone opens the screen that lists it. See SortableDateTimeOffsetConverter
+        // and ADR-040.
+        var timestamps = new SortableDateTimeOffsetConverter();
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTimeOffset) ||
+                    property.ClrType == typeof(DateTimeOffset?))
+                {
+                    property.SetValueConverter(timestamps);
+                }
+            }
+        }
     }
 }

@@ -422,3 +422,27 @@ dependency. Payslips and reports print through `window.print()` against a print 
 produces a correct A4 document and a PDF via the print dialogue. No PDF library is taken.
 **Consequences:** Figures get out of the system today with no new risk. A direct PDF writer and an
 Excel export remain available as a later convenience, and are recorded as such rather than as gaps.
+
+### ADR-040 — Timestamps are stored in a form SQLite can order
+**Status:** Accepted (Final QA)
+**Context:** Final QA rendered the Razor components headlessly for the first time. Every screen in
+the application failed on first render with
+`SQLite does not support expressions of type 'DateTimeOffset' in ORDER BY clauses`. EF Core's own
+SQLite mapping writes a `DateTimeOffset` as its *local* date and time followed by the offset, which
+does not sort chronologically once two rows carry different offsets, so the provider refuses to
+translate `ORDER BY`, `Min` and `Max` over such a column. The refusal is a runtime exception, and
+twelve queries across the dashboard, payroll, loans, timesheets, reports and the audit trail hit
+it. Nothing in the compiler, the Razor type check or the service-level tests could see it, because
+those tests order in memory over lists they have already materialised.
+**Decision:** `SortableDateTimeOffsetConverter` stores the instant first, in UTC, in a fixed-width
+form, with the original offset appended: `2026-09-17T12:32:00.0000000Z+02:00`. Ordering the text is
+then exactly ordering the instant, the offset still round-trips and no precision is lost. It is
+applied in `OnModelCreating` to *every* `DateTimeOffset` property in the model rather than to a
+chosen few, because a column the converter misses is a column the database cannot order by, and
+that failure appears on a user's screen rather than in a build. The column type is unchanged —
+SQLite stored these as TEXT already — so no migration is required; only the text inside changes,
+and a database written by an earlier build is still read correctly by the fallback parse.
+**Consequences:** Ordering by time works everywhere, in SQL, with the row limit applied by the
+database rather than after loading the table. The regression guard is `Tawaka.Ui.Tests`, which
+renders every route: if a future query reintroduces an unorderable column, a test fails rather than
+a payroll officer's screen.

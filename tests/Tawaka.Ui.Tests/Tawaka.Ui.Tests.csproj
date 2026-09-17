@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- bUnit renders the real Razor components headlessly: the component lifecycle, the router,
+         data binding and event handlers all run. It is MIT licensed, so it carries none of the
+         licence problem that kept FluentAssertions out (ADR-016). It is NOT a substitute for
+         running the WPF host on Windows; see docs/WINDOWS_VALIDATION.md. -->
+    <PackageReference Include="bunit" Version="1.40.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.0" />
+    <PackageReference Include="xunit" Version="2.4.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tawaka.Domain\Tawaka.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Tawaka.Application\Tawaka.Application.csproj" />
+    <ProjectReference Include="..\..\src\Tawaka.Infrastructure\Tawaka.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Tawaka.Payroll.Engine\Tawaka.Payroll.Engine.csproj" />
+    <ProjectReference Include="..\..\src\Tawaka.Ui.Shared\Tawaka.Ui.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
