@@ -137,7 +137,6 @@
     private readonly Employee _employee = new() { Status = EmployeeStatus.Active };
     private readonly EmployeeContract _contract = new()
     {
-        PayrollCurrency = "USD",
         PaymentFrequency = PaymentFrequency.Monthly,
         EarningsBasis = EarningsBasis.MonthlySalary,
         StandardHoursPerDay = 8m,
@@ -170,7 +169,13 @@
 
     protected override void OnInitialized()
     {
-        _companyId = Db.Companies.AsNoTracking().Select(c => c.Id).FirstOrDefault();
+        var company = Db.Companies.AsNoTracking()
+            .Select(c => new { c.Id, c.DefaultPayrollCurrency }).FirstOrDefault();
+
+        _companyId = company?.Id ?? Guid.Empty;
+
+        // The company's own default, not a currency this screen decided on.
+        _contract.PayrollCurrency = company?.DefaultPayrollCurrency ?? _contract.PayrollCurrency;
         _employmentTypes = Db.EmploymentTypes.AsNoTracking()
             .Where(t => t.CompanyId == _companyId && t.IsActive)
             .OrderBy(t => t.DisplayOrder).ToList();

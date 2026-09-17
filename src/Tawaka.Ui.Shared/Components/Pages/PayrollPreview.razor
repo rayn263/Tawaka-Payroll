@@ -145,18 +145,18 @@ else
                                     <div class="muted small">@row.EmployeeNumber</div>
                                 </td>
                                 <td>@(row.CurrencyCode == "ZWG" ? "ZiG" : row.CurrencyCode)</td>
-                                <td class="num">@Show(row.Basic, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.Allowances, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.Overtime, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.Bonus, row.CurrencyCode)</td>
-                                <td class="num strong">@Show(row.GrossEarningsAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.TaxableIncomeAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.PayeAfterCreditsAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.AidsLevyAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.NssaEmployeeAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.TotalOtherDeductionsAmount, row.CurrencyCode)</td>
-                                <td class="num strong">@Show(row.NetPayAmount, row.CurrencyCode)</td>
-                                <td class="num">@Show(row.TotalEmployerCostAmount, row.CurrencyCode)</td>
+                                <td class="num">@Show(row.Basic)</td>
+                                <td class="num">@Show(row.Allowances)</td>
+                                <td class="num">@Show(row.Overtime)</td>
+                                <td class="num">@Show(row.Bonus)</td>
+                                <td class="num strong">@Show(row.GrossEarningsAmount)</td>
+                                <td class="num">@Show(row.TaxableIncomeAmount)</td>
+                                <td class="num">@Show(row.PayeAfterCreditsAmount)</td>
+                                <td class="num">@Show(row.AidsLevyAmount)</td>
+                                <td class="num">@Show(row.NssaEmployeeAmount)</td>
+                                <td class="num">@Show(row.TotalOtherDeductionsAmount)</td>
+                                <td class="num strong">@Show(row.NetPayAmount)</td>
+                                <td class="num">@Show(row.TotalEmployerCostAmount)</td>
                                 <td>
                                     <button class="btn btn-quiet"
                                             @onclick="() => Explain(row.Id)">Explain</button>
@@ -167,14 +167,14 @@ else
                         <tfoot>
                         <tr class="totals">
                             <td colspan="6" class="strong">Total (@(group.Key == "ZWG" ? "ZiG" : group.Key))</td>
-                            <td class="num strong">@Sum(group, r => r.GrossEarningsAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.TaxableIncomeAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.PayeAfterCreditsAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.AidsLevyAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.NssaEmployeeAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.TotalOtherDeductionsAmount, group.Key)</td>
-                            <td class="num strong">@Sum(group, r => r.NetPayAmount, group.Key)</td>
-                            <td class="num">@Sum(group, r => r.TotalEmployerCostAmount, group.Key)</td>
+                            <td class="num strong">@Sum(group, r => r.GrossEarningsAmount)</td>
+                            <td class="num">@Sum(group, r => r.TaxableIncomeAmount)</td>
+                            <td class="num">@Sum(group, r => r.PayeAfterCreditsAmount)</td>
+                            <td class="num">@Sum(group, r => r.AidsLevyAmount)</td>
+                            <td class="num">@Sum(group, r => r.NssaEmployeeAmount)</td>
+                            <td class="num">@Sum(group, r => r.TotalOtherDeductionsAmount)</td>
+                            <td class="num strong">@Sum(group, r => r.NetPayAmount)</td>
+                            <td class="num">@Sum(group, r => r.TotalEmployerCostAmount)</td>
                             <td></td>
                         </tr>
                         </tfoot>
@@ -294,13 +294,16 @@ else
     }
 
     /// <summary>An unresolved figure shows as a dash, never as 0.00.</summary>
-    private static string Show(decimal? amount, string currency) =>
+    private static string Show(decimal? amount) =>
         amount is null
             ? "—"
             : amount.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
 
-    private static string Sum(
-        IEnumerable<Row> rows, Func<Row, decimal?> selector, string currency)
+    /// <summary>
+    /// A column total for one currency's group. The caller has already grouped by currency, so
+    /// this never adds two currencies together.
+    /// </summary>
+    private static string Sum(IEnumerable<Row> rows, Func<Row, decimal?> selector)
     {
         var values = rows.Select(selector).Where(v => v is not null).Select(v => v!.Value).ToList();
         return values.Count == 0

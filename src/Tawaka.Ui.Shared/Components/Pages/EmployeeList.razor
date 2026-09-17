@@ -43,8 +43,10 @@
 
     <select @bind="_currency" @bind:after="ReloadAsync">
         <option value="">All currencies</option>
-        <option value="USD">USD</option>
-        <option value="ZWG">ZiG</option>
+        @foreach (var currency in _currencies)
+        {
+            <option value="@currency.Code">@currency.DisplayCode</option>
+        }
     </select>
 </div>
 
@@ -95,6 +97,7 @@
     private List<EmployeeListItem> _rows = new();
     private List<Department> _departments = new();
     private List<EmploymentType> _employmentTypes = new();
+    private List<Domain.Currencies.Currency> _currencies = new();
 
     private string _filter = string.Empty;
     private string _status = string.Empty;
@@ -113,6 +116,8 @@
         _employmentTypes = Db.EmploymentTypes.AsNoTracking()
             .Where(t => t.CompanyId == _companyId && t.IsActive)
             .OrderBy(t => t.DisplayOrder).ToList();
+        _currencies = Db.Currencies.AsNoTracking().Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder).ToList();
         await ReloadAsync();
     }
 

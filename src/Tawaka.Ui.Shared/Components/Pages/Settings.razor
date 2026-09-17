@@ -463,7 +463,7 @@ else if (_tab == "Backup & restore")
     private string _bankName = string.Empty;
     private string _branchName = string.Empty;
     private string _accountNumber = string.Empty;
-    private string _accountCurrency = "USD";
+    private string _accountCurrency = string.Empty;
     private PaymentPurpose _accountPurpose = PaymentPurpose.NetPay;
 
     protected override async Task OnInitializedAsync() => await Load();
@@ -471,6 +471,12 @@ else if (_tab == "Backup & restore")
     private async Task Load()
     {
         _company = Db.Companies.FirstOrDefault();
+
+        // The company's own default, not a currency this screen decided on.
+        if (string.IsNullOrEmpty(_accountCurrency))
+        {
+            _accountCurrency = _company?.DefaultPayrollCurrency ?? string.Empty;
+        }
         if (_company is null)
         {
             return;

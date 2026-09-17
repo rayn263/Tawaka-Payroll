@@ -29,7 +29,7 @@
         <div class="form-grid">
             <div>
                 <label>Employee *</label>
-                <select @bind="_employeeId">
+                <select @bind="_employeeId" @bind:after="ApplyPayCurrency">
                     <option value="@Guid.Empty">Select…</option>
                     @foreach (var employee in _employees)
                     {
@@ -54,6 +54,14 @@
                         <option value="@currency">@(currency == "ZWG" ? "ZiG" : currency)</option>
                     }
                 </select>
+                @if (_payCurrency is not null && _currency != _payCurrency)
+                {
+                    <div class="muted small warning-text">
+                        This employee is paid in @(_payCurrency == "ZWG" ? "ZiG" : _payCurrency).
+                        A loan in another currency cannot be recovered from their pay: payroll will
+                        leave the instalment out and report it as an input it did not use.
+                    </div>
+                }
             </div>
             <div><label>Principal *</label><input type="number" step="0.01" @bind="_principal" /></div>
             <div><label>Instalments *</label><input type="number" @bind="_instalments" /></div>
@@ -322,7 +330,8 @@ else
 
     private Guid _employeeId;
     private LoanKind _kind = LoanKind.Loan;
-    private string _currency = "USD";
+    private string _currency = string.Empty;
+    private string? _payCurrency;
     private decimal _principal;
     private int _instalments = 6;
     private decimal _interest;
@@ -347,7 +356,31 @@ else
             .OrderBy(c => c.SortOrder)
             .Select(c => c.CurrencyCode).ToList();
 
+        // The company's own default, not a currency this screen decided on.
+        _currency = Db.Companies.AsNoTracking()
+            .Where(c => c.Id == _companyId)
+            .Select(c => c.DefaultPayrollCurrency)
+            .FirstOrDefault() ?? _currencies.FirstOrDefault() ?? string.Empty;
+
         await LoadAsync();
+    }
+
+    /// <summary>
+    /// A loan is recovered out of pay, so it starts in the currency this employee is paid in.
+    /// </summary>
+    private void ApplyPayCurrency()
+    {
+        _payCurrency = _employeeId == Guid.Empty
+            ? null
+            : Db.EmployeeContracts.AsNoTracking()
+                .Where(c => c.EmployeeId == _employeeId && c.IsCurrent)
+                .Select(c => c.PayrollCurrency)
+                .FirstOrDefault();
+
+        if (_payCurrency is not null && _currencies.Contains(_payCurrency))
+        {
+            _currency = _payCurrency;
+        }
     }
 
     private async Task LoadAsync()
