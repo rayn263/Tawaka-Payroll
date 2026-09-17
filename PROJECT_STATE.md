@@ -1,8 +1,9 @@
 # Project State
 
-**Last updated:** 2026-09-15
-**Current phase:** First complete release
-**Current milestone:** Final release consolidation — **COMPLETE, awaiting review**
+**Last updated:** 2026-09-17
+**Current phase:** Release candidate
+**Current milestone:** Final QA, Windows validation and release-candidate audit — **COMPLETE**
+(report: `docs/FINAL_QA_REPORT.md`)
 **Release stage:** COMPLIANCE-UNVERIFIED (live payroll gated and blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
@@ -77,7 +78,7 @@ and `Tawaka.Payroll.sln` (adds the Windows desktop host).
 | | |
 |---|---|
 | Provider | SQLite |
-| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913084801_PayrollRunsAndResults`, `20260915113432_StatutoryObligationsAndPayslips`, `20260915130007_TimeLeaveCalendarAndLoans`, `20260915163143_AccountingAuditAndSiteCost` |
+| Migrations | `20260912221408_InitialFoundation`, `20260912224100_CompanyEmployeesAndSecurity`, `20260913084801_PayrollRunsAndResults`, `20260915113432_StatutoryObligationsAndPayslips`, `20260915130007_TimeLeaveCalendarAndLoans`, `20260915163143_AccountingAuditAndSiteCost`, `20260917170000_PayrollPeriodCodeScopedToCompany` |
 | Tables | 73 |
 
 Milestone 1 (16): `AidsLevyRules`, `AppSettings`, `ApwcsRules`, `AuditLogs`, `Currencies`,
@@ -146,18 +147,21 @@ these calculates in development mode only.
 | Domain | 29 | 0 |
 | Application | 43 | 0 |
 | Payroll.Engine | 230 | 1 |
-| Infrastructure | 268 | 0 |
-| **Total** | **570** | **1** |
+| Infrastructure | 307 | 0 |
+| Ui (headless component rendering) | 43 | 0 |
+| **Total** | **652** | **1** |
+
+Written as **456 test methods**; a `[Theory]` runs once per `[InlineData]`, giving 653 executed
+cases. No base class declares tests, so nothing is counted twice.
 
 The final release added the end-to-end journey (both currencies, plus the unverified-rule and
 mixed-currency refusals), the reconciliation suite, structural integrity tests, release-readiness
 tests, backup and restore tests, and demonstration-data guards.
 
-**A correction to the Milestone 5 figure.** That report said 608. Five test classes inherited
-`StatutoryObligationTests`, so xUnit re-ran its 18 tests in each of them: roughly 90 of the 608
-were the same tests executed repeatedly. The fixture is now a fact-free
-`PayrollFixtureBase`, so every number above is a distinct test. The honest comparison is 518
-distinct tests then against 570 now.
+**A correction carried forward.** The Milestone 5 report said 608 because five test classes
+inherited `StatutoryObligationTests` and xUnit re-ran its 18 tests in each: roughly 90 of that 608
+were the same tests executed repeatedly. The fixtures are fact-free now and the check is repeated
+each milestone. Like for like: 518 executed cases at Milestone 5, 570 at the final release, 653 now.
 
 One case remains skipped: **TC-18**, part-time NSSA ceiling treatment, which depends on compliance
 questions Q4a and Q22.
@@ -265,9 +269,23 @@ working-days and ordinary-hours divisor).
 
 ## 8. Status
 
-**This is the first complete release.** No further development milestone is proposed. The
-application is feature-complete for its designed scope and awaits review, a Windows build, and the
-statutory verification work described in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26.
+**Release candidate.** Feature-complete for its designed scope, audited, and not released.
+
+The Final QA milestone froze scope and validated the application rather than extending it. It found
+and fixed two P0 defects — the Windows solution file had never parsed on any platform, and nothing
+in the application could create a second user, which left the approval model unreachable — three P1
+defects, and four P2 defects. `docs/FINAL_QA_REPORT.md` is the full account.
+
+Two things stand between this and a release, and neither is a code change:
+
+1. **Windows validation has not been performed.** It could not be: the Linux SDK has no
+   WindowsDesktop targets, so the WPF host compiles nowhere here. `docs/WINDOWS_VALIDATION.md` is
+   the exact procedure.
+2. **No statutory rule is verified**, and none could be verified from this environment — every
+   authoritative Zimbabwean source is blocked at the network layer. `docs/COMPLIANCE_STATUS.md`
+   states each open question and what would answer it.
+
+No further development milestone is proposed.
 
 Live payroll remains blocked: the engine calculates in development mode only until every required
 statutory rule has been confirmed against its authoritative source and a person records the

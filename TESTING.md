@@ -12,13 +12,31 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **570 passing, 1 skipped, 0 failing, 0 warnings.**
+Current result: **652 passing, 1 skipped, 0 failing, 0 warnings**, in Debug and in Release.
 
-> **A correction to the Milestone 5 figure of 608.** Five test classes inherited
-> `StatutoryObligationTests`, so xUnit re-ran its 18 tests inside each of them — roughly 90 of
-> that 608 were the same tests executed repeatedly. The shared fixture is now a fact-free
-> `PayrollFixtureBase`, so every number reported here is a distinct test. The honest comparison is
-> 518 distinct tests at Milestone 5 against 570 now.
+### How that number is counted
+
+| | |
+|---|---|
+| Test methods written | **456** |
+| Cases executed | **653** — a `[Theory]` runs once per `[InlineData]`, and each run is counted here |
+| Passed | 652 |
+| Skipped | 1 (TC-18, pending Q4a/Q22) |
+| Failed | 0 |
+
+No test class inherits a class that declares tests, so nothing is counted twice. That is checked,
+not assumed: a base class carrying a `[Fact]` is re-run once per derived class, which is how the
+Milestone 5 report came to say 608 when the honest figure was 518. The shared fixtures
+(`EmployeeTestBase`, `PayrollFixtureBase`, `UiTestHost`, `PayrollUiScenario`) declare no tests at
+all.
+
+| | Milestone 5 | Final release | Final QA |
+|---|---|---|---|
+| Distinct test methods | 518 | 570 | **456 methods / 653 cases** |
+
+The method count falls below the earlier figures because those counted executed cases, as this
+column's second number does. Compared like with like, the suite grew from 570 executed cases to
+653.
 
 ## The two kinds of test
 

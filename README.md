@@ -22,7 +22,7 @@ A professional, Windows-based payroll management system for businesses operating
 ```bash
 apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
 ./build.sh                          # build the cross-platform solution
-./test.sh                           # 570 passing, 1 skipped (pending Q4a/Q22)
+./test.sh                           # 652 passing, 1 skipped (pending Q4a/Q22)
 ./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll                  # gate closed: calculation only
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules   # simulated verification: inputs, calculation, obligations
@@ -71,6 +71,7 @@ It is built around four non-negotiable principles:
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | **Where the project actually is**: phase, milestone, architecture as built, database version, rules implemented and verified, known issues, next milestone |
 | [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
 | [`RELEASE_GUIDE.md`](RELEASE_GUIDE.md) | **The one guide: installing, first run, company and employee setup, payroll, approvals, payslips, obligations, reports, backup, restore, corrections, locking, audit, troubleshooting** |
+| [`docs/FINAL_QA_REPORT.md`](docs/FINAL_QA_REPORT.md) | **The QA audit: what was tested, what was found, what was fixed, and what must happen before live payroll** |
 | [`docs/COMPLIANCE_STATUS.md`](docs/COMPLIANCE_STATUS.md) | Where every open compliance question stands, and what would answer it |
 | [`docs/WINDOWS_VALIDATION.md`](docs/WINDOWS_VALIDATION.md) | The Windows validation that has **not** been performed, and exactly how to perform it |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
