@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tawaka.Application.Payroll;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Security;
 using Tawaka.Domain.Payroll;
@@ -140,7 +141,7 @@ public sealed class PayrollReportService
 
         var snapshots = await _context.PayrollInputSnapshots.AsNoTracking()
             .Where(s => s.PayrollRunId == runId)
-            .Select(s => new { s.PayrollRunEmployeeId, s.SnapshotHash })
+            .Select(s => new { s.PayrollRunEmployeeId, s.SnapshotHash, s.SnapshotJson })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -175,6 +176,10 @@ public sealed class PayrollReportService
             Nssa = BuildNssa(employees, profiles),
             Inputs = BuildInputs(employees, inputSources,
                 snapshots.ToDictionary(s => s.PayrollRunEmployeeId, s => s.SnapshotHash)),
+            SkippedInputs = BuildSkippedInputs(
+                employees,
+                snapshots.ToDictionary(
+                    s => s.PayrollRunEmployeeId, s => (s.SnapshotHash, s.SnapshotJson))),
             StatutoryPayments = BuildPayments(obligations, payments),
             Audit = BuildAudit(run, actors),
             Filter = filter,
@@ -401,6 +406,45 @@ public sealed class PayrollReportService
                     s.ApprovedBy, s.ApprovedAt,
                     snapshotHashes.TryGetValue(e.Id, out var hash) ? hash : string.Empty)))
             .ToList();
+
+    /// <summary>
+    /// What this run left out. Read from each employee's sealed snapshot, which is the only place
+    /// that knows: the calculation itself has no record of an input it never received.
+    /// </summary>
+    private static IReadOnlyList<SkippedInputRow> BuildSkippedInputs(
+        List<PayrollRunEmployee> employees,
+        Dictionary<Guid, (string Hash, string Json)> snapshots)
+    {
+        var rows = new List<SkippedInputRow>();
+
+        foreach (var employee in employees.OrderBy(e => e.EmployeeName))
+        {
+            if (!snapshots.TryGetValue(employee.Id, out var stored))
+            {
+                continue;
+            }
+
+            if (PayrollSnapshotStore.Hash(stored.Json) != stored.Hash)
+            {
+                rows.Add(new SkippedInputRow(
+                    employee.EmployeeNumber, employee.EmployeeName, "Snapshot",
+                    "This employee's stored snapshot no longer matches its hash and cannot be " +
+                    "read. It has been altered since it was sealed."));
+                continue;
+            }
+
+            var snapshot = PayrollSnapshotStore.Deserialise(stored.Json);
+            if (snapshot is null)
+            {
+                continue;
+            }
+
+            rows.AddRange(snapshot.SkippedInputs.Select(skipped => new SkippedInputRow(
+                employee.EmployeeNumber, employee.EmployeeName, skipped.InputType, skipped.Reason)));
+        }
+
+        return rows;
+    }
 
     /// <summary>
     /// Payments actually made against this run's obligations, reversals included. A reversed

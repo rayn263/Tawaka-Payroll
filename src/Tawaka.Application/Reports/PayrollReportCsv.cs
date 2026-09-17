@@ -203,6 +203,16 @@ public static class PayrollReportCsv
                     r.EmployeeNumber, r.EmployeeName, r.InputType, r.Description,
                     ReportExporter.Text(r.ApprovedBy), ReportExporter.Date(r.ApprovedAt),
                     r.SnapshotHash
+                }).ToList()),
+
+            // Exported alongside, because an input the payroll left out matters at least as much
+            // as the ones it used.
+            new ExportTable(
+                "Inputs this run did not use", null,
+                new[] { "Employee number", "Employee", "Input type", "Reason" },
+                reports.SkippedInputs.Select(r => (IReadOnlyList<string>)new[]
+                {
+                    r.EmployeeNumber, r.EmployeeName, r.InputType, r.Reason
                 }).ToList())
         };
 

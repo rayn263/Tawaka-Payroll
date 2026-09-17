@@ -85,7 +85,8 @@ public sealed class PayrollSnapshotBuilder
             .ConfigureAwait(false);
         var leave = await BuildLeaveAsync(employeeId, period, approved, skipped, cancellationToken)
             .ConfigureAwait(false);
-        var loans = await BuildLoanDeductionsAsync(employeeId, period, currency, approved, cancellationToken)
+        var loans = await BuildLoanDeductionsAsync(
+                employeeId, period, currency, approved, skipped, cancellationToken)
             .ConfigureAwait(false);
         var engagement = await BuildCasualEngagementAsync(employeeId, employmentType, period,
             cancellationToken).ConfigureAwait(false);
@@ -531,7 +532,8 @@ public sealed class PayrollSnapshotBuilder
     /// </summary>
     private async Task<List<LoanDeductionInput>> BuildLoanDeductionsAsync(
         Guid employeeId, PayrollPeriod period, CurrencyCode currency,
-        List<ApprovedInputReference> approved, CancellationToken cancellationToken)
+        List<ApprovedInputReference> approved, List<SkippedInput> skipped,
+        CancellationToken cancellationToken)
     {
         var due = await _loans.GetDueDeductionsAsync(
             employeeId, period.Id, period.EndDate, cancellationToken).ConfigureAwait(false);
@@ -544,6 +546,12 @@ public sealed class PayrollSnapshotBuilder
             // amount and therefore an approved conversion rule, which is Q1 and still open.
             if (item.Amount.Currency != currency)
             {
+                // Recorded rather than dropped: an instalment that was not recovered has to be
+                // visible in the snapshot, because the employee still owes it.
+                skipped.Add(new SkippedInput(
+                    "Loan", item.Loan.Id,
+                    $"{item.Loan.LoanNumber} is in {item.Amount.Currency.Value} and this payroll " +
+                    $"is in {currency.Value}. The instalment was not recovered."));
                 continue;
             }
 

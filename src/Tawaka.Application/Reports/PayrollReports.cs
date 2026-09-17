@@ -125,6 +125,18 @@ public sealed record PayrollInputRow(
     string EmployeeNumber, string EmployeeName, string InputType, string Description,
     string? ApprovedBy, DateTimeOffset? ApprovedAt, string SnapshotHash);
 
+/// <summary>
+/// An input this payroll did <b>not</b> consume, and why.
+/// <para>
+/// A timesheet that was never approved, or a loan instalment in a currency this payroll is not
+/// paid in, is left out of the calculation. The snapshot has always recorded that; this puts it
+/// on the report, because an input that is silently dropped is an employee underpaid or a debt
+/// never recovered, and nobody finds out.
+/// </para>
+/// </summary>
+public sealed record SkippedInputRow(
+    string EmployeeNumber, string EmployeeName, string InputType, string Reason);
+
 /// <summary>Statutory payments actually made, with their evidence.</summary>
 public sealed record StatutoryPaymentRow(
     StatutoryObligationType ObligationType, StatutoryAuthority Authority, DateOnly PaymentDate,
@@ -170,6 +182,10 @@ public sealed record PayrollRunReports
         Array.Empty<CurrencySection<NssaReportRow>>();
 
     public IReadOnlyList<PayrollInputRow> Inputs { get; init; } = Array.Empty<PayrollInputRow>();
+
+    /// <summary>Inputs this run did not consume, with the reason recorded in its snapshot.</summary>
+    public IReadOnlyList<SkippedInputRow> SkippedInputs { get; init; } =
+        Array.Empty<SkippedInputRow>();
 
     public IReadOnlyList<CurrencySection<StatutoryPaymentRow>> StatutoryPayments { get; init; } =
         Array.Empty<CurrencySection<StatutoryPaymentRow>>();

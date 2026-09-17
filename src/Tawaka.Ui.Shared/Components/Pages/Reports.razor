@@ -762,6 +762,39 @@ else
                 </p>
             }
         </div>
+
+        <div class="card">
+            <h2>Inputs this run did not use</h2>
+            @if (_reports.SkippedInputs.Count == 0)
+            {
+                <EmptyState Title="Nothing was left out"
+                            Description="Every approved input for this period reached the calculation." />
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <strong>@_reports.SkippedInputs.Count inputs were not used.</strong>
+                    An input left out is pay not made or a debt not recovered. Each one is listed
+                    with the reason recorded in the sealed snapshot.
+                </div>
+                <table class="data">
+                    <thead>
+                    <tr><th>Number</th><th>Employee</th><th>Input</th><th>Reason</th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _reports.SkippedInputs)
+                    {
+                        <tr>
+                            <td class="mono">@row.EmployeeNumber</td>
+                            <td class="strong">@row.EmployeeName</td>
+                            <td>@row.InputType</td>
+                            <td>@row.Reason</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
     }
 
     @if (_tab == "audit" || _printing)

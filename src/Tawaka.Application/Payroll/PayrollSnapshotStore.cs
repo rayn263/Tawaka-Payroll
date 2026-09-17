@@ -123,9 +123,15 @@ public sealed class PayrollSnapshotStore
                 "match its hash. It has been altered since it was sealed and cannot be trusted.");
         }
 
-        return JsonSerializer.Deserialize<PayrollInputSnapshot>(
-            record.SnapshotJson, SerializerOptions);
+        return Deserialise(record.SnapshotJson);
     }
+
+    /// <summary>
+    /// Deserialises a stored snapshot. Unlike <see cref="ReadAsync"/> this does not check the
+    /// hash, so the caller must — a snapshot that no longer matches its hash has been altered.
+    /// </summary>
+    public static PayrollInputSnapshot? Deserialise(string json) =>
+        JsonSerializer.Deserialize<PayrollInputSnapshot>(json, SerializerOptions);
 
     /// <summary>Every approved input a run consumed, for the run's audit page.</summary>
     public Task<List<PayrollRunInputSource>> GetInputSourcesAsync(
