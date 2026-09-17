@@ -21,7 +21,7 @@ namespace Tawaka.Infrastructure.Persistence;
 public sealed class SortableDateTimeOffsetConverter : ValueConverter<DateTimeOffset, string>
 {
     /// <summary>Length of a value written in this form; used to recognise it on read.</summary>
-    internal const int Width = 34;
+    public const int Width = 34;
 
     private const string InstantFormat = "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'";
 
@@ -30,12 +30,12 @@ public sealed class SortableDateTimeOffsetConverter : ValueConverter<DateTimeOff
     {
     }
 
-    internal static string Write(DateTimeOffset value) =>
+    public static string Write(DateTimeOffset value) =>
         value.UtcDateTime.ToString(InstantFormat, CultureInfo.InvariantCulture)
         + (value.Offset < TimeSpan.Zero ? '-' : '+')
         + value.Offset.Duration().ToString("hh\\:mm", CultureInfo.InvariantCulture);
 
-    internal static DateTimeOffset Read(string stored)
+    public static DateTimeOffset Read(string stored)
     {
         // A database written before ADR-040 holds EF's own format. It is still read correctly;
         // only the ordering of those rows would have been wrong, and no such database was ever
