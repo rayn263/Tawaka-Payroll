@@ -68,6 +68,64 @@ public sealed class UserAdministrationUiTests : UiTestHost
         Assert.Empty(Db.Users.AsNoTracking().Where(u => u.Username == "nobody").ToList());
     }
 
+    /// <summary>
+    /// A person's role changes — an officer is promoted to manager. Without this an account is
+    /// stuck with whatever it was created as.
+    /// </summary>
+    [Fact]
+    public void A_users_roles_can_be_changed_after_they_are_created()
+    {
+        var page = UsersTab();
+        var officer = Db.Roles.AsNoTracking().Single(r => r.Name == RoleNames.PayrollOfficer);
+        var manager = Db.Roles.AsNoTracking().Single(r => r.Name == RoleNames.Manager);
+
+        Field(page, "Username").Change("r.moyo");
+        Field(page, "Full name").Change("Rudo Moyo");
+        page.FindAll("input[type=checkbox]")[RoleIndex(page, officer.Name)].Change(true);
+        Button(page, "Create user").Click();
+        Button(page, "Done").Click();
+
+        // Promote them.
+        RowButton(page, "r.moyo", "Roles").Click();
+        page.FindAll("input[type=checkbox]")[RoleIndex(page, officer.Name)].Change(false);
+        page.FindAll("input[type=checkbox]")[RoleIndex(page, manager.Name)].Change(true);
+        Button(page, "Save roles").Click();
+
+        Db.ChangeTracker.Clear();
+        var user = Db.Users.AsNoTracking().Single(u => u.Username == "r.moyo");
+        var roleIds = Db.UserRoles.AsNoTracking()
+            .Where(r => r.UserId == user.Id).Select(r => r.RoleId).ToList();
+
+        Assert.Equal(new[] { manager.Id }, roleIds);
+    }
+
+    /// <summary>
+    /// And segregation of duties still holds across the two roles taken together.
+    /// </summary>
+    [Fact]
+    public void A_user_cannot_be_given_two_roles_that_conflict_between_them()
+    {
+        var page = UsersTab();
+        var officer = Db.Roles.AsNoTracking().Single(r => r.Name == RoleNames.PayrollOfficer);
+        var manager = Db.Roles.AsNoTracking().Single(r => r.Name == RoleNames.Manager);
+
+        Field(page, "Username").Change("t.ncube");
+        Field(page, "Full name").Change("Tapiwa Ncube");
+        page.FindAll("input[type=checkbox]")[RoleIndex(page, officer.Name)].Change(true);
+        Button(page, "Create user").Click();
+        Button(page, "Done").Click();
+
+        RowButton(page, "t.ncube", "Roles").Click();
+        page.FindAll("input[type=checkbox]")[RoleIndex(page, manager.Name)].Change(true);
+        Button(page, "Save roles").Click();
+
+        Assert.Contains("Segregation of duties", page.Markup);
+
+        Db.ChangeTracker.Clear();
+        var user = Db.Users.AsNoTracking().Single(u => u.Username == "t.ncube");
+        Assert.Single(Db.UserRoles.AsNoTracking().Where(r => r.UserId == user.Id).ToList());
+    }
+
     [Fact]
     public void A_user_without_the_permission_is_shown_no_user_administration_at_all()
     {
@@ -77,6 +135,29 @@ public sealed class UserAdministrationUiTests : UiTestHost
 
         Assert.DoesNotContain("Add a user", page.Markup);
         Assert.DoesNotContain("Create user", page.Markup);
+    }
+
+    /// <summary>The action button on the row for one username, not whichever row comes first.</summary>
+    private static AngleSharp.Dom.IElement RowButton(
+        IRenderedFragment page, string username, string caption)
+    {
+        foreach (var row in page.FindAll("tbody tr"))
+        {
+            if (row.QuerySelector("td.mono")?.TextContent.Trim() != username)
+            {
+                continue;
+            }
+
+            var button = row.QuerySelectorAll("button")
+                .FirstOrDefault(b => b.TextContent.Trim() == caption);
+
+            if (button is not null)
+            {
+                return button;
+            }
+        }
+
+        throw new InvalidOperationException($"No '{caption}' button on the row for {username}.");
     }
 
     private static int RoleIndex(IRenderedFragment page, string roleName)

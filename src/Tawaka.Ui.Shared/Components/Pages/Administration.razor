@@ -184,6 +184,9 @@
                     </td>
                     <td>
                         <button class="btn btn-quiet"
+                                @onclick="() => OpenRoles(user)">Roles</button>
+
+                        <button class="btn btn-quiet"
                                 @onclick="() => ResetPasswordAsync(user.Id)">Reset password</button>
 
                         @if (user.LockedUntil is { } locked && locked > DateTimeOffset.Now)
@@ -214,6 +217,37 @@
             so an account that should no longer be used is disabled.
         </p>
     </div>
+
+    @if (_changingRoles is not null)
+    {
+        <div class="card">
+            <div class="page-header">
+                <h2>Roles — @_changingRoles.FullName</h2>
+                <button class="btn btn-quiet" @onclick="() => _changingRoles = null">Cancel</button>
+            </div>
+            <div class="checkbox-list">
+                @foreach (var role in _roles)
+                {
+                    <label class="checkbox">
+                        <input type="checkbox"
+                               checked="@_editRoleIds.Contains(role.Id)"
+                               @onchange="e => ToggleEditRole(role.Id, e)" />
+                        <span class="strong">@role.Name</span>
+                        <span class="muted small">@role.Description</span>
+                    </label>
+                }
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveRolesAsync" disabled="@_busy">
+                    Save roles
+                </button>
+            </div>
+            <p class="muted small">
+                One person cannot hold two roles that between them combine duties no single role is
+                allowed to hold — calculating and approving a payroll, for instance.
+            </p>
+        </div>
+    }
 
     <div class="card">
         <h2>Add a user</h2>
@@ -289,6 +323,8 @@
     private string _newFullName = string.Empty;
     private string _newEmail = string.Empty;
     private readonly List<Guid> _newRoleIds = new();
+    private UserSummary? _changingRoles;
+    private readonly List<Guid> _editRoleIds = new();
     private ValidationResult? _validation;
     private UserCredential? _issued;
     private bool _busy;
@@ -374,6 +410,53 @@
             _issued = result.Value;
             _newUsername = _newFullName = _newEmail = string.Empty;
             _newRoleIds.Clear();
+            await LoadUsersAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OpenRoles(UserSummary user)
+    {
+        _validation = null;
+        _changingRoles = user;
+        _editRoleIds.Clear();
+        _editRoleIds.AddRange(_roles.Where(r => user.Roles.Contains(r.Name)).Select(r => r.Id));
+    }
+
+    private void ToggleEditRole(Guid roleId, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+        {
+            if (!_editRoleIds.Contains(roleId))
+            {
+                _editRoleIds.Add(roleId);
+            }
+        }
+        else
+        {
+            _editRoleIds.Remove(roleId);
+        }
+    }
+
+    private async Task SaveRolesAsync()
+    {
+        _busy = true;
+        try
+        {
+            var validation = await UserAdmin.SetRolesAsync(
+                _changingRoles!.Id, _editRoleIds.ToList());
+
+            if (!validation.IsValid)
+            {
+                _validation = validation;
+                return;
+            }
+
+            _validation = null;
+            _changingRoles = null;
             await LoadUsersAsync();
         }
         finally

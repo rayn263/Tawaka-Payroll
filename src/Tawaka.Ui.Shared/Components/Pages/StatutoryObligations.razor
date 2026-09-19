@@ -77,6 +77,12 @@ else
                                         <button class="btn btn-primary"
                                                 @onclick="() => OpenPayment(obligation)">Record payment</button>
                                     }
+
+                                    @if (obligation.Payments.Any(p => !p.IsReversed))
+                                    {
+                                        <button class="btn btn-quiet"
+                                                @onclick="() => OpenPayments(obligation)">Payments</button>
+                                    }
                                 }
                             </td>
                         </tr>
@@ -100,6 +106,71 @@ else
             </p>
         </div>
     }
+}
+
+@if (_listing is not null)
+{
+    <div class="card">
+        <div class="page-header">
+            <h2>Payments — @_listing.ObligationType (@(_listing.CurrencyCode == "ZWG" ? "ZiG" : _listing.CurrencyCode))</h2>
+            <button class="btn btn-quiet" @onclick="() => _listing = null">Close</button>
+        </div>
+
+        <table class="data">
+            <thead>
+            <tr><th>Date</th><th class="num">Amount</th><th>Method</th><th>Reference</th>
+                <th>Receipt</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+            @foreach (var payment in _listing.Payments.OrderBy(p => p.PaymentDate))
+            {
+                <tr class="@(payment.IsReversed ? "inactive" : null)">
+                    <td>@payment.PaymentDate.ToString("dd MMM yyyy")</td>
+                    <td class="num">@payment.Amount.ToString("N2")</td>
+                    <td>@payment.PaymentMethod</td>
+                    <td class="mono">@payment.PaymentReference</td>
+                    <td class="mono">@(payment.AuthorityReceiptNumber ?? "—")</td>
+                    <td>
+                        @if (payment.IsReversed)
+                        {
+                            <StatusBadge Label="Reversed" Tone="disabled" />
+                            <div class="muted small">@payment.ReversalReason</div>
+                        }
+                        else
+                        {
+                            <StatusBadge Label="Recorded" Tone="verified" />
+                        }
+                    </td>
+                    <td>
+                        @if (!payment.IsReversed && Session.HasPermission(Permissions.StatutoryRecordPayment))
+                        {
+                            <button class="btn btn-quiet"
+                                    @onclick="() => _reversing = payment.Id">Reverse</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        @if (_reversing is not null)
+        {
+            <h3>Reverse this payment</h3>
+            <p class="muted">
+                The payment stays on the record — an auditor needs to see both the payment and its
+                undoing — and the amount goes back onto the outstanding balance.
+            </p>
+            <div class="form-grid">
+                <div><label>Reason *</label><input @bind="_reversalReason" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="ReversePaymentAsync" disabled="@_busy">
+                    Reverse payment
+                </button>
+                <button class="btn btn-quiet" @onclick="() => _reversing = null">Cancel</button>
+            </div>
+        }
+    </div>
 }
 
 @if (_paying is not null)
@@ -154,6 +225,42 @@ else
 
     private decimal _amount;
     private DateTime _paymentDate = DateTime.Today;
+    private StatutoryObligation? _listing;
+    private Guid? _reversing;
+    private string _reversalReason = string.Empty;
+    private bool _busy;
+
+    private void OpenPayments(StatutoryObligation obligation)
+    {
+        _listing = obligation;
+        _reversing = null;
+        _reversalReason = string.Empty;
+    }
+
+    private async Task ReversePaymentAsync()
+    {
+        _busy = true;
+        try
+        {
+            var validation = await Obligations.ReversePaymentAsync(_reversing!.Value, _reversalReason);
+
+            if (!validation.IsValid)
+            {
+                _validation = validation;
+                return;
+            }
+
+            _validation = null;
+            _reversing = null;
+            _reversalReason = string.Empty;
+            _listing = null;
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
     private StatutoryPaymentMethod _method = StatutoryPaymentMethod.BankTransfer;
     private string _reference = string.Empty;
     private string _receipt = string.Empty;

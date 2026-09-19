@@ -160,6 +160,60 @@ public sealed class PayslipReportAndStatutoryUiTests : PayrollUiScenario
         Assert.Equal(paye.CalculatedAmount - half, after.Outstanding.Amount);
     }
 
+    /// <summary>
+    /// A payment recorded in error has to be undoable, and undoing it has to put the money back on
+    /// the balance without erasing that it was recorded.
+    /// </summary>
+    [Fact]
+    public void A_payment_can_be_reversed_from_the_screen_and_the_balance_comes_back()
+    {
+        var (run, _) = FinalisedPayroll();
+
+        Session.SignOut();
+        SignIn("Anesu Chirwa", Tawaka.Domain.Security.RoleNames.Administrator,
+            Tawaka.Domain.Security.Permissions.StatutoryView,
+            Tawaka.Domain.Security.Permissions.StatutoryRecordPayment);
+
+        var page = RenderComponent<StatutoryObligations>();
+
+        var paye = Db.StatutoryObligations.AsNoTracking()
+            .Include(o => o.Payments)
+            .Single(o => o.PayrollRunId == run.Id &&
+                         o.ObligationType == StatutoryObligationType.Paye);
+
+        Button(page, "Approve").Click();
+        page.Render();
+        Button(page, "Record payment").Click();
+
+        Field(page, "Amount").Change(
+            paye.CalculatedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Field(page, "Payment date").Change("2026-10-08");
+        Field(page, "Payment reference").Change("RTGS-WRONG");
+        page.FindAll("button").Last(b => b.TextContent.Trim() == "Record payment").Click();
+
+        Db.ChangeTracker.Clear();
+        Assert.True(Db.StatutoryObligations.AsNoTracking()
+            .Include(o => o.Payments).Single(o => o.Id == paye.Id).IsPaid);
+
+        // Now undo it.
+        Button(page, "Payments").Click();
+        Button(page, "Reverse").Click();
+        Field(page, "Reason").Change("Paid against the wrong obligation.");
+        Button(page, "Reverse payment").Click();
+
+        Db.ChangeTracker.Clear();
+        var after = Db.StatutoryObligations.AsNoTracking()
+            .Include(o => o.Payments)
+            .Single(o => o.Id == paye.Id);
+
+        Assert.False(after.IsPaid);
+        Assert.Equal(paye.CalculatedAmount, after.Outstanding.Amount);
+
+        var payment = Assert.Single(after.Payments);
+        Assert.True(payment.IsReversed);
+        Assert.Equal("Paid against the wrong obligation.", payment.ReversalReason);
+    }
+
     [Fact]
     public void A_user_without_the_payment_permission_is_not_offered_the_payment_button()
     {
