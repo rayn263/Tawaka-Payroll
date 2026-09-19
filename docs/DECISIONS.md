@@ -96,7 +96,7 @@ only on 🟢 rules; anything lower raises a blocking error naming the rule and i
 permits lower grades but watermarks every output `TEST — NOT FOR STATUTORY USE`, creates no
 statutory obligations, and cannot finalise or lock a run.
 **Consequences:** The system cannot produce a live payroll until the verification checklist in
-`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 is worked through. That is intentional: a payroll
+`COMPLIANCE_SPEC.md` §26 is worked through. That is intentional: a payroll
 system that silently computes on unverified rates is worse than one that refuses.
 
 ### ADR-013 — Official period tables only; no derived tax tables

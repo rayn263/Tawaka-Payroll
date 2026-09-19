@@ -33,7 +33,7 @@ restore, 2.2 (outstanding-obligation reminders), 2.7 (the audit log screen) and 
 report).
 
 **Live payroll remains gated throughout.** Every milestone above calculates in development mode
-only until the verification checklist in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 is cleared.
+only until the verification checklist in `COMPLIANCE_SPEC.md` §26 is cleared.
 
 Each milestone ends with something you can actually run and inspect. Nothing is "done" until it
 is testable by you, not merely compiled.

@@ -7,7 +7,7 @@ using Xunit;
 namespace Tawaka.Payroll.Engine.Tests;
 
 /// <summary>
-/// The 34 test cases from ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md §24, kept together so the whole
+/// The 34 test cases from COMPLIANCE_SPEC.md §24, kept together so the whole
 /// compliance surface is visible in one test run.
 /// <para>
 /// Cases split two ways, as required. BEHAVIOUR cases assert engine behaviour and pass

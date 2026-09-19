@@ -126,7 +126,7 @@ them. Earnings are now rounded to currency precision on entry.
 ## The 34 compliance cases
 
 `ComplianceTestCatalogue.cs` holds all 34 cases from
-`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §24 in one place, so the whole compliance surface appears
+`COMPLIANCE_SPEC.md` §24 in one place, so the whole compliance surface appears
 in every test run.
 
 **Implemented (33 of 34).** Milestone 3 activated most of the catalogue against the real engine;

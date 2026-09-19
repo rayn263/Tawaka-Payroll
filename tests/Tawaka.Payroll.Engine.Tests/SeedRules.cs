@@ -5,7 +5,7 @@ using Tawaka.Payroll.Engine.Inputs;
 namespace Tawaka.Payroll.Engine.Tests;
 
 /// <summary>
-/// The seed statutory rules from ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md, as the engine receives
+/// The seed statutory rules from COMPLIANCE_SPEC.md, as the engine receives
 /// them after resolution.
 /// <para>
 /// Graded Verified here <b>only so that engine behaviour can be tested</b>. In the running system

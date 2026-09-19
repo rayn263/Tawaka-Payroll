@@ -1,6 +1,6 @@
 # Open Questions — decisions required
 
-**Last updated:** 2026-09-12 (revised after compliance research — see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`)
+**Last updated:** 2026-09-12 (revised after compliance research — see `COMPLIANCE_SPEC.md`)
 
 `BLOCKING` items must be answered before the affected code is written. `NON-BLOCKING` items have a
 sensible default recorded and can be changed later in Settings without rework.
@@ -11,7 +11,7 @@ sensible default recorded and can be changed later in Settings without rework.
 
 | # | Question | Status | Default if unanswered |
 |---|---|---|---|
-> **Status update.** Q1–Q6 were researched in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`. Q2 and Q3
+> **Status update.** Q1–Q6 were researched in `COMPLIANCE_SPEC.md`. Q2 and Q3
 > are resolved in substance, Q5 largely so, Q4 partly. Q1 advanced but remains open. Q6 is
 > externally dependent on NSSA. Eight new blocking questions (Q21–Q28) were discovered and are
 > listed at the end of this file. The authoritative status register is §25 of the spec.
@@ -56,7 +56,7 @@ rule rows and set their `VerificationStatus`.
 
 ## New blocking questions discovered during compliance research (Q21–Q33)
 
-Full detail and reasoning in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25.2.
+Full detail and reasoning in `COMPLIANCE_SPEC.md` §25.2.
 Q29 and Q30 were found during the Milestone 4 access recheck (§0.1a and §1.4a).
 Q31–Q33 were found during Milestone 5, building time, leave and loan inputs.
 
@@ -105,4 +105,4 @@ The instruction was to distinguish these, and they are recorded separately:
 
 Nothing in the codebase encodes (b). What it encodes is that a table which cannot be resolved for a
 (currency, period basis) pair leaves the figure unresolved — which is the correct behaviour whether
-(a) or (b) turns out to hold. Full note at `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §1.4a.
+(a) or (b) turns out to hold. Full note at `COMPLIANCE_SPEC.md` §1.4a.

@@ -27,7 +27,7 @@ One or more statutory rules required for this payroll have not been verified.
 | Blocking questions open | 19 (Q1, Q3-values, Q4a, Q5-partial, Q6, Q21–Q33) |
 
 No rule is Verified because no primary source could be opened from the build environment; see
-`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §0. The path to clearing the gate is §26 of that
+`COMPLIANCE_SPEC.md` §0. The path to clearing the gate is §26 of that
 document — ten documents, roughly one working day.
 
 Access was **rechecked twice on 15 September 2026** — once for Milestone 4's ZWG table question and
@@ -36,7 +36,7 @@ egress proxy. Nothing was upgraded.
 
 On **Q29** the two possible claims are kept apart, as instructed: *(a)* this environment cannot
 retrieve an authoritative ZWG monthly table — true and evidenced; *(b)* no such table exists — **not
-claimed**, and nothing in the codebase encodes it. See `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`
+claimed**, and nothing in the codebase encodes it. See `COMPLIANCE_SPEC.md`
 §1.4a. Milestone 5 added **Q31** (overtime multipliers), **Q32** (statutory leave entitlements) and
 **Q33** (the salary-to-daily-rate divisor).
 
@@ -259,7 +259,7 @@ through resolved rules, and a rule that cannot be resolved produces an absent fi
 
 ## 7. Blocking questions
 
-Full register in `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §25; summary in
+Full register in `COMPLIANCE_SPEC.md` §25; summary in
 `docs/OPEN_QUESTIONS.md`. Highest impact: **Q26** (PAYE fixed-deduction column — blocks all PAYE),
 **Q1** (multi-currency methodology), **Q22** (NSSA ceiling on weekly payroll), **Q6** (APWCS rate).
 All four remain open as at Milestone 5 and are restated in `docs/OPEN_QUESTIONS.md` so they cannot

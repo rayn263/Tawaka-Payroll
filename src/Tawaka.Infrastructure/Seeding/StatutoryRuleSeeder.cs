@@ -8,7 +8,7 @@ namespace Tawaka.Infrastructure.Seeding;
 
 /// <summary>
 /// Seeds reference data and the statutory rule baseline from
-/// ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md.
+/// COMPLIANCE_SPEC.md.
 /// <para>
 /// Every seeded rule carries its real verification status and source. Nothing here is marked
 /// Verified, because no rule in the specification has been confirmed against a primary source —
@@ -18,7 +18,7 @@ namespace Tawaka.Infrastructure.Seeding;
 /// </summary>
 public sealed class StatutoryRuleSeeder
 {
-    private const string SpecReference = "ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md";
+    private const string SpecReference = "COMPLIANCE_SPEC.md";
 
     private readonly PayrollDbContext _context;
 

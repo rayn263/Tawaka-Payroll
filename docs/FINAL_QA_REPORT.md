@@ -426,7 +426,7 @@ finalised, cannot create obligations, and cannot be paid.
 
 ## 19. Installation
 
-Full detail in `RELEASE_GUIDE.md`. In short:
+Full detail in `DEPLOYMENT.md` and `USER_GUIDE.md`. In short:
 
 1. **Requirements** — Windows 10 (1809+) or 11, x64; Microsoft's WebView2 Evergreen runtime; about
    200 MB of disk; no administrator rights.
@@ -457,7 +457,7 @@ Full detail in `RELEASE_GUIDE.md`. In short:
 | Backup and restore instructions | **Produced** |
 | Test report | **Produced** (§16) |
 | Compliance status report | **Produced** (§17, `docs/COMPLIANCE_STATUS.md`) |
-| **Self-contained Windows executable** | **NOT PRODUCED.** It cannot be built in this environment (§1). The exact command is in `RELEASE_GUIDE.md` §3 and must be run on Windows |
+| **Self-contained Windows executable** | **NOT PRODUCED.** It cannot be built in this environment (§1). The exact command is in `DEPLOYMENT.md` §3 and must be run on Windows |
 
 ---
 

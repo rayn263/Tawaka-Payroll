@@ -2,7 +2,7 @@
 
 A professional, Windows-based payroll management system for businesses operating in Zimbabwe.
 
-> **Status: first complete release — awaiting review.**
+> **Status: release candidate — compliance unverified, Windows unvalidated.**
 > The application supports the whole payroll journey: company setup, employees and effective-dated
 > contracts, projects and sites, time and overtime, leave, loans and advances, input approval,
 > calculation with a full audit trace, review, approval, finalisation, statutory obligations and
@@ -11,7 +11,7 @@ A professional, Windows-based payroll management system for businesses operating
 > **It reports itself as COMPLIANCE-UNVERIFIED and will not run a live payroll.** No statutory
 > figure in it has been read from ZIMRA, NSSA or a Statutory Instrument — every Zimbabwean official
 > domain is blocked from the build environment. Clearing that is a finite, documented task for
-> somebody with access to those documents: see `ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26.
+> somebody with access to those documents: see `COMPLIANCE_SPEC.md` §26.
 >
 > **The Windows desktop host has never been compiled or run.** The screens compile and are
 > type-checked on every build, and every one is rendered headlessly by `tests/Tawaka.Ui.Tests`;
@@ -31,6 +31,27 @@ dotnet run --project tools/Tawaka.Foundation.Cli -- --demo-data                #
 
 All screens live in `src/Tawaka.Ui.Shared` and compile anywhere. The Windows host builds from
 `Tawaka.Payroll.sln` on Windows only.
+
+## How do I…
+
+Short answers. The full versions are in `DEPLOYMENT.md`, `USER_GUIDE.md` and `OPERATIONS.md`.
+
+| | |
+|---|---|
+| **Install it** | Copy `Tawaka.Payroll.exe` anywhere the user can write and run it. Install Microsoft's WebView2 runtime first if the machine lacks it. No installer, no administrator rights |
+| **Build the executable** | `dotnet publish src/Tawaka.Ui.Desktop -c Release -p:PublishProfile=win-x64`, on Windows |
+| **Start for the first time** | It creates its database, migrates it, seeds the baseline and shows a generated administrator password **once**. Write it down; it cannot be recovered. Sign in as `admin` and change it |
+| **Create the company** | Settings → Company profile, then Currencies, then Bank accounts |
+| **Create users** | Administration → Users → Add a user, with a role each. **At least two are needed**: whoever calculates a payroll may not approve it |
+| **Add employees** | Employees → Add employee captures the person and their first contract together. Afterwards their profile edits their details, terms, statutory numbers, standing earnings and deductions, and payment accounts |
+| **Run payroll** | Payroll → create the period → New run → Calculate → review, using **Explain** on any figure |
+| **Get it approved** | A different person approves it. Then finalise — which creates the statutory obligations — then record net wages paid |
+| **Handle statutory obligations** | Statutory → Obligations. Approve one, then record a payment against it with a reference. Only a recorded payment marks it paid; part payments and reversals are supported |
+| **Issue payslips** | From the payroll preview or the employee's payroll history. Rendered from the stored result, printed through the browser print dialogue |
+| **Get figures out** | Reports — fourteen reports, filtered, per currency, exported to CSV, plus a balanced accounting journal per currency |
+| **Back up** | Settings → Backup & restore, before every payroll run and every upgrade. Keep them off the machine |
+| **Understand why LIVE payroll is blocked** | No statutory rule has been checked against its official source, so the application refuses to run a live payroll. Statutory → Compliance status says which questions are open |
+| **Unblock it** | Obtain the documents, then verify each rule in Statutory → Statutory rules, recording what you read. `docs/COMPLIANCE_STATUS.md` lists exactly which documents are needed |
 
 ## What this is
 
@@ -64,19 +85,27 @@ It is built around four non-negotiable principles:
 
 | Document | Contents |
 |---|---|
-| [`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md`](ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md) | **Authoritative specification for the payroll calculation engine.** Statutory rules with per-rule confidence grades, dual-currency methodology, 34 test cases, verification checklist, blocking decision register |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technology stack, application architecture, navigation, calculation pipeline, payslip design, security model, file structure, feature status |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Full relational schema, entity relationships, money and currency representation |
-| [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, verification status, per-rule confidence, compliance risks |
-| [`PROJECT_STATE.md`](PROJECT_STATE.md) | **Where the project actually is**: phase, milestone, architecture as built, database version, rules implemented and verified, known issues, next milestone |
-| [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
-| [`RELEASE_GUIDE.md`](RELEASE_GUIDE.md) | **The one guide: installing, first run, company and employee setup, payroll, approvals, payslips, obligations, reports, backup, restore, corrections, locking, audit, troubleshooting** |
-| [`docs/FINAL_QA_REPORT.md`](docs/FINAL_QA_REPORT.md) | **The QA audit: what was tested, what was found, what was fixed, and what must happen before live payroll** |
+| **Start here** | |
+| [`DEPLOYMENT.md`](DEPLOYMENT.md) | Installing it, building it, publishing the Windows executable, and what the machine needs |
+| [`USER_GUIDE.md`](USER_GUIDE.md) | Setting a company up and running its payroll, start to finish |
+| [`OPERATIONS.md`](OPERATIONS.md) | Release stages, backups, restoring, locking, the audit trail, demonstration data |
+| [`SECURITY.md`](SECURITY.md) | Authentication, authorisation, segregation of duties, integrity, and what is deliberately not attempted |
+| **Where the project stands** | |
+| [`PROJECT_STATE.md`](PROJECT_STATE.md) | Phase, architecture as built, database version, rules implemented and verified, known limitations |
+| [`docs/FINAL_RELEASE_STATUS.md`](docs/FINAL_RELEASE_STATUS.md) | The release report: what was tested, what was found, what remains |
 | [`docs/COMPLIANCE_STATUS.md`](docs/COMPLIANCE_STATUS.md) | Where every open compliance question stands, and what would answer it |
 | [`docs/WINDOWS_VALIDATION.md`](docs/WINDOWS_VALIDATION.md) | The Windows validation that has **not** been performed, and exactly how to perform it |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phased development plan with testable milestones |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision record (ADR) log |
-| [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business before or during development |
+| **Engineering** | |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technology stack, layering, navigation, calculation pipeline, payslip design, file structure |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Full relational schema, entity relationships, money and currency representation |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | The architecture decision record: every design decision, with its reasoning |
+| [`TESTING.md`](TESTING.md) | How to run the tests, the behaviour/seed split, and the 34-case compliance catalogue |
+| **Statutory** | |
+| [`COMPLIANCE_SPEC.md`](COMPLIANCE_SPEC.md) | Authoritative specification for the calculation engine: rules with confidence grades, dual-currency methodology, 34 test cases, verification checklist |
+| [`docs/COMPLIANCE_ZIMBABWE.md`](docs/COMPLIANCE_ZIMBABWE.md) | Zimbabwe statutory requirements, source references, per-rule confidence, compliance risks |
+| [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) | Decisions required from the business, and the open compliance register |
+| **History** | |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/FINAL_QA_REPORT.md`](docs/FINAL_QA_REPORT.md), `docs/MILESTONE_*.md` | How the project got here |
 
 ## Release stage
 
@@ -94,7 +123,7 @@ The engine runs in LIVE mode only on rules graded 🟢 VERIFIED. **No rule curre
 grade**, because every Zimbabwean official domain is blocked by this environment's network egress
 policy and no primary source could be read — rechecked four times across the project, most
 recently for this release. Clearing the gate is a documented, finite task: see
-`ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md` §26 — ten documents, roughly one working day.
+`COMPLIANCE_SPEC.md` §26 — ten documents, roughly one working day.
 
 ## Important compliance notice
 

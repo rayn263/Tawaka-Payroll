@@ -22,7 +22,7 @@ namespace Tawaka.Infrastructure.Seeding;
 /// </summary>
 public sealed class CompanySeeder
 {
-    private const string SpecReference = "ZIMBABWE_PAYROLL_COMPLIANCE_SPEC_V1.md";
+    private const string SpecReference = "COMPLIANCE_SPEC.md";
 
     private readonly PayrollDbContext _context;
 
