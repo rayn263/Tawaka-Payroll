@@ -55,6 +55,60 @@ public class InvariantTests
         Assert.Equal(other, result.TotalOtherDeductions!.Value.Amount);
     }
 
+    /// <summary>
+    /// A recovery larger than the pay it is recovered from must not produce a negative net pay.
+    /// An employee who finishes the month owing their employer money is not a payroll outcome, it
+    /// is a recovery that should have been reduced — so the engine refuses the figure and says so
+    /// rather than publishing a negative one.
+    /// </summary>
+    [Theory]
+    [InlineData(850, 900)]
+    [InlineData(850, 850)]
+    [InlineData(1200, 5000)]
+    public void Deductions_larger_than_the_pay_leave_no_net_pay_rather_than_a_negative_one(
+        decimal salary, decimal recovery)
+    {
+        var result = Engine.Calculate(SnapshotBuilder.Usd()
+            .Basic(salary)
+            .Deduction("LOAN", "Loan recovery", recovery)
+            .Build());
+
+        Assert.Null(result.NetPay);
+        Assert.NotEqual(PayrollResultStatus.Calculated, result.Status);
+
+        var unresolved = Assert.Single(
+            result.Unresolved, u => u.Code == UnresolvedCodes.DeductionsExceedEarnings);
+
+        Assert.Equal("NetPay", unresolved.ItemKey);
+        Assert.Contains("exceed gross earnings", unresolved.Message);
+        Assert.Contains("Loan recovery", unresolved.Message);
+        Assert.False(string.IsNullOrWhiteSpace(unresolved.Remedy));
+
+        // The figures that are known are still stated: the officer needs them to fix the recovery.
+        Assert.NotNull(result.GrossEarnings);
+        Assert.NotNull(result.TotalDeductions);
+    }
+
+    /// <summary>
+    /// The counterpart: a recovery that fits leaves a net pay, and it is the arithmetic and not a
+    /// floor at zero.
+    /// </summary>
+    [Fact]
+    public void A_recovery_that_fits_is_deducted_in_full()
+    {
+        var result = Engine.Calculate(SnapshotBuilder.Usd()
+            .Basic(850m)
+            .Deduction("LOAN", "Loan recovery", 100m)
+            .Build());
+
+        Assert.Equal(PayrollResultStatus.Calculated, result.Status);
+        Assert.Contains(result.Deductions, d => d.Code == "LOAN" && d.Amount.Amount == 100m);
+        Assert.Equal(
+            result.GrossEarnings!.Value.Amount - result.TotalDeductions!.Value.Amount,
+            result.NetPay!.Value.Amount);
+        Assert.True(result.NetPay!.Value.Amount > 0m);
+    }
+
     /// <summary>Statutory deductions can never exceed the earnings they are charged on.</summary>
     [Theory]
     [MemberData(nameof(Salaries))]

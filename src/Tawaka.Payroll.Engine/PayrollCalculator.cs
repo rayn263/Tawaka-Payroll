@@ -492,7 +492,40 @@ public sealed class PayrollCalculator
         context.TotalStatutoryDeductions = statutory;
         context.TotalOtherDeductions = other;
         context.TotalDeductions = total;
-        context.NetPay = gross - total;
+
+        var net = gross - total;
+
+        // A negative net pay is not a payroll figure: it says the employee finished the month
+        // owing their employer money. It happens when a recovery — a loan instalment, an advance,
+        // a court order — is larger than what was earned, and the honest answer is to say so and
+        // refuse the figure, not to publish a negative one or to quietly recover less than the
+        // ledger says was recovered. The run cannot be approved while this stands.
+        if (net.Amount < 0m)
+        {
+            var nonStatutory = string.Join(", ", context.Deductions
+                .Where(d => !d.IsStatutory)
+                .OrderByDescending(d => d.Amount.Amount)
+                .Select(d => $"{d.Name} {d.Amount.Amount:N2}"));
+
+            context.Unresolve(new UnresolvedItem(
+                UnresolvedCodes.DeductionsExceedEarnings,
+                "NetPay",
+                $"Deductions of {total} exceed gross earnings of {gross}, which would leave this " +
+                $"employee owing {-net.Amount:N2} rather than being paid." +
+                (nonStatutory.Length > 0 ? $" Recoveries in this period: {nonStatutory}." : string.Empty),
+                Remedy: "Reduce or defer a recovery for this period, then recalculate. Statutory " +
+                        "deductions cannot be reduced; a loan or advance instalment can."));
+
+            context.Trace(new TraceEntryBuilder("ComputeNetPay", "Net pay")
+                .Input("Gross earnings", gross)
+                .Input("Total deductions", total)
+                .Explain("Deductions exceed gross earnings, so there is no net pay to state.")
+                .Build());
+
+            return;
+        }
+
+        context.NetPay = net;
 
         var trace = new TraceEntryBuilder("ComputeNetPay", "Net pay")
             .Input("Gross earnings", gross);

@@ -47,6 +47,12 @@ public static class UnresolvedCodes
     public const string TimesheetNotApproved = "TIMESHEET_NOT_APPROVED";
     public const string LeaveEntitlementUnresolved = "LEAVE_ENTITLEMENT_UNRESOLVED";
 
+    /// <summary>
+    /// Deductions came to more than the employee earned. Not a missing rule — a recovery that has
+    /// to be reduced or deferred before this payroll can be paid.
+    /// </summary>
+    public const string DeductionsExceedEarnings = "DEDUCTIONS_EXCEED_EARNINGS";
+
     /// <summary>Casual engagement approaching or past the Labour Act s.12(3) threshold.</summary>
     public const string CasualEngagementThreshold = "CASUAL_ENGAGEMENT_THRESHOLD";
 }

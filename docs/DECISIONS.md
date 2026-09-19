@@ -470,3 +470,22 @@ own account. Editing the permissions *of a role* is still not exposed — `RoleS
 reachable only from tests — so the four seeded roles are what an installation has. That is recorded
 as a known limitation rather than closed here, because the scope of this milestone is validation
 and defect repair.
+
+### ADR-042 — A negative net pay is refused, not published
+**Status:** Accepted (Final release hardening)
+**Context:** Net pay was gross less every deduction, with no floor and no check. A recovery larger
+than the pay it comes out of — a loan instalment, an advance, a court order — therefore produced a
+negative net pay, which is not a payroll outcome: it says the employee finished the month owing
+their employer money. The loan ledger allows a large instalment because the balance is genuinely
+there to recover; it is payroll that has to decline.
+**Decision:** Where deductions exceed gross earnings the engine records
+`DEDUCTIONS_EXCEED_EARNINGS` against `NetPay`, naming the recoveries in the period and what to do
+about them, and leaves net pay absent. Gross and total deductions are still stated, because the
+officer needs them to size the correction. Because the run then carries an unresolved item it
+cannot be approved, so nothing downstream — obligations, payslips, payments — can be produced from
+it. Statutory deductions can never cause this on their own; they are capped at the earnings they
+are charged on, which is a separate invariant and already tested.
+**Consequences:** The alternatives were both worse. Flooring net pay at zero would have recovered
+less than the loan ledger recorded as recovered, silently. Publishing the negative would have put
+a figure on a payslip that no employer can act on. Refusing, and saying which recovery caused it,
+leaves a person to make the decision that is theirs: reduce the instalment, or defer it.
