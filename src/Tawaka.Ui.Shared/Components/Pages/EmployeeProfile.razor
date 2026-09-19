@@ -2,6 +2,7 @@
 @page "/employees/{EmployeeId:guid}"
 @inject PayrollDbContext Db
 @inject EmployeeContractService Contracts
+@inject EmployeeService Employees
 @inject UserSession Session
 
 @if (_employee is null)
@@ -31,6 +32,8 @@ else
         }
     </div>
 
+    <ValidationSummaryPanel Result="_validation" />
+
     <div class="card">
         @switch (_tab)
         {
@@ -45,6 +48,51 @@ else
                     <dt>Email</dt><dd>@Show(_employee.Email)</dd>
                     <dt>Address</dt><dd>@Show(_employee.AddressLine1) @_employee.City</dd>
                 </dl>
+
+                @if (Session.HasPermission(Permissions.EmployeesEdit))
+                {
+                    @if (_editing is null)
+                    {
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" @onclick="StartEditAsync">
+                                Edit details
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <h3>Edit details</h3>
+                        <div class="form-grid">
+                            <div><label>Employee number *</label><input @bind="_editing.EmployeeNumber" /></div>
+                            <div><label>First name *</label><input @bind="_editing.FirstName" /></div>
+                            <div><label>Middle name</label><input @bind="_editing.MiddleName" /></div>
+                            <div><label>Last name *</label><input @bind="_editing.LastName" /></div>
+                            <div><label>National ID</label><input @bind="_editing.NationalId" /></div>
+                            <div><label>Date of birth</label><input type="date" @bind="_editDateOfBirth" /></div>
+                            <div>
+                                <label>Gender</label>
+                                <select @bind="_editing.Gender">
+                                    @foreach (var gender in Enum.GetValues<Gender>())
+                                    {
+                                        <option value="@gender">@gender</option>
+                                    }
+                                </select>
+                            </div>
+                            <div><label>Nationality</label><input @bind="_editing.Nationality" /></div>
+                            <div><label>Phone</label><input @bind="_editing.Phone" /></div>
+                            <div><label>Email</label><input @bind="_editing.Email" /></div>
+                            <div><label>Address</label><input @bind="_editing.AddressLine1" /></div>
+                            <div><label>City</label><input @bind="_editing.City" /></div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" @onclick="SaveDetailsAsync" disabled="@_busy">
+                                Save details
+                            </button>
+                            <button class="btn btn-quiet" @onclick="CancelEdit">Cancel</button>
+                        </div>
+                    }
+                }
+
                 break;
 
             case "Employment":
@@ -85,6 +133,39 @@ else
                         </tbody>
                     </table>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesDeactivate) &&
+                     _employee.Status != EmployeeStatus.Terminated)
+                {
+                    <h3>End employment</h3>
+                    <p class="muted">
+                        An employee is never deleted. Ending employment closes the current contract
+                        and records the change; every payroll they were on stays exactly as it was.
+                    </p>
+                    <div class="form-grid">
+                        <div>
+                            <label>New status *</label>
+                            <select @bind="_newStatus">
+                                @foreach (var status in new[]
+                                          {
+                                              EmployeeStatus.Terminated, EmployeeStatus.Suspended,
+                                              EmployeeStatus.Inactive, EmployeeStatus.Active
+                                          })
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
+                        </div>
+                        <div><label>Effective date *</label><input type="date" @bind="_statusDate" /></div>
+                        <div><label>Reason *</label><input @bind="_statusReason" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" @onclick="ChangeStatusAsync" disabled="@_busy">
+                            Record status change
+                        </button>
+                    </div>
+                }
+
                 break;
 
             case "Contract":
@@ -131,6 +212,63 @@ else
                         </tbody>
                     </table>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesEditSalary) && _currentContract is not null)
+                {
+                    <h3>Change contract terms</h3>
+                    <p class="muted">
+                        This creates a new version from the date you give. The current version is
+                        closed off, not overwritten, and payroll for a period before that date still
+                        uses it.
+                    </p>
+                    <div class="form-grid">
+                        <div>
+                            <label>Effective from *</label>
+                            <input type="date" @bind="_supersedeFrom" />
+                        </div>
+                        <div>
+                            <label>Reason *</label>
+                            <input @bind="_supersedeReason" placeholder="Annual review" />
+                        </div>
+                        <div>
+                            <label>Payroll currency *</label>
+                            <select @bind="_newTerms.PayrollCurrency">
+                                @foreach (var currency in _currencies)
+                                {
+                                    <option value="@currency.Code">@currency.DisplayCode</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label>Payment frequency *</label>
+                            <select @bind="_newTerms.PaymentFrequency">
+                                @foreach (var frequency in Enum.GetValues<PaymentFrequency>())
+                                {
+                                    <option value="@frequency">@frequency</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label>Earnings basis *</label>
+                            <select @bind="_newTerms.EarningsBasis">
+                                @foreach (var basis in Enum.GetValues<EarningsBasis>())
+                                {
+                                    <option value="@basis">@basis</option>
+                                }
+                            </select>
+                        </div>
+                        <div><label>Monthly rate</label><input type="number" step="0.01" @bind="_newTerms.MonthlyRate" /></div>
+                        <div><label>Daily rate</label><input type="number" step="0.01" @bind="_newTerms.DailyRate" /></div>
+                        <div><label>Hourly rate</label><input type="number" step="0.01" @bind="_newTerms.HourlyRate" /></div>
+                        <div><label>Contract end date</label><input type="date" @bind="_newTermsEnd" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="SupersedeAsync" disabled="@_busy">
+                            Create new version
+                        </button>
+                    </div>
+                }
+
                 break;
 
             case "Earnings":
@@ -164,6 +302,37 @@ else
                         </tbody>
                     </table>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesEditSalary))
+                {
+                    <h3>Add a recurring earning</h3>
+                    <div class="form-grid">
+                        <div>
+                            <label>Earning *</label>
+                            <select @bind="_earningTypeId">
+                                <option value="">Select…</option>
+                                @foreach (var type in _earningTypes)
+                                {
+                                    <option value="@type.Id">@type.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div><label>Amount *</label><input type="number" step="0.01" @bind="_earningAmount" /></div>
+                        <div><label>From *</label><input type="date" @bind="_earningFrom" /></div>
+                        <div><label>To</label><input type="date" @bind="_earningTo" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="AddEarningAsync" disabled="@_busy">
+                            Add earning
+                        </button>
+                    </div>
+                    <p class="muted small">
+                        The amount is in the employee's payroll currency,
+                        @(CurrencyLabel(_currentContract?.PayrollCurrency)). An earning whose tax or
+                        NSSA treatment is unverified is priced in development mode only.
+                    </p>
+                }
+
                 break;
 
             case "Deductions":
@@ -193,6 +362,32 @@ else
                         </tbody>
                     </table>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesEditSalary))
+                {
+                    <h3>Add a recurring deduction</h3>
+                    <div class="form-grid">
+                        <div>
+                            <label>Deduction *</label>
+                            <select @bind="_deductionTypeId">
+                                <option value="">Select…</option>
+                                @foreach (var type in _deductionTypes)
+                                {
+                                    <option value="@type.Id">@type.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div><label>Amount *</label><input type="number" step="0.01" @bind="_deductionAmount" /></div>
+                        <div><label>From *</label><input type="date" @bind="_deductionFrom" /></div>
+                        <div><label>To</label><input type="date" @bind="_deductionTo" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="AddDeductionAsync" disabled="@_busy">
+                            Add deduction
+                        </button>
+                    </div>
+                }
+
                 break;
 
             case "Statutory":
@@ -213,6 +408,53 @@ else
                         return until one is captured.
                     </div>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesEdit))
+                {
+                    <h3>Statutory identifiers</h3>
+                    <div class="form-grid">
+                        <div>
+                            <label>Tax number (ZIMRA)</label>
+                            <input @bind="_taxNumber" placeholder="BP1234567" />
+                        </div>
+                        <div>
+                            <label>NSSA number</label>
+                            <input @bind="_nssaNumber" />
+                        </div>
+                        <div>
+                            <label>NEC membership number</label>
+                            <input @bind="_necNumber" />
+                        </div>
+                        <div class="checkbox-list">
+                            <label class="checkbox">
+                                <input type="checkbox" @bind="_payeExempt" />
+                                <span>PAYE exempt</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" @bind="_elderlyCredit" />
+                                <span>Elderly credit</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" @bind="_disabledCredit" />
+                                <span>Disabled credit</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" @bind="_blindCredit" />
+                                <span>Blind credit</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" @bind="_necMember" />
+                                <span>NEC member</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="SaveStatutoryAsync" disabled="@_busy">
+                            Save statutory details
+                        </button>
+                    </div>
+                }
+
                 break;
 
             case "Payment":
@@ -247,6 +489,43 @@ else
                         currency the employee's payroll is denominated in.
                     </p>
                 }
+
+                @if (Session.HasPermission(Permissions.EmployeesEdit))
+                {
+                    <h3>Add a payment account</h3>
+                    <div class="form-grid">
+                        <div>
+                            <label>Method *</label>
+                            <select @bind="_accountMethod">
+                                @foreach (var method in Enum.GetValues<PaymentMethod>())
+                                {
+                                    <option value="@method">@method</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label>Currency *</label>
+                            <select @bind="_accountCurrency">
+                                @foreach (var currency in _currencies)
+                                {
+                                    <option value="@currency.Code">@currency.DisplayCode</option>
+                                }
+                            </select>
+                        </div>
+                        <div><label>Account name</label><input @bind="_accountName" /></div>
+                        <div><label>Bank</label><input @bind="_accountBank" /></div>
+                        <div><label>Branch</label><input @bind="_accountBranch" /></div>
+                        <div><label>Account number</label><input @bind="_accountNumber" /></div>
+                        <div><label>Mobile money provider</label><input @bind="_accountProvider" /></div>
+                        <div><label>Mobile money number</label><input @bind="_accountMobile" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="AddAccountAsync" disabled="@_busy">
+                            Add account
+                        </button>
+                    </div>
+                }
+
                 break;
 
             case "Projects":
@@ -468,6 +747,53 @@ else
     private Dictionary<Guid, string> _departments = new();
     private Dictionary<Guid, string> _locations = new();
 
+    // ---- Editing state ---------------------------------------------------------------------
+    private List<Domain.Currencies.Currency> _currencies = new();
+    private List<EarningType> _earningTypes = new();
+    private List<DeductionType> _deductionTypes = new();
+    private ValidationResult? _validation;
+    private bool _busy;
+
+    private Employee? _editing;
+    private DateTime? _editDateOfBirth;
+
+    private EmployeeStatus _newStatus = EmployeeStatus.Terminated;
+    private DateTime _statusDate = DateTime.Today;
+    private string _statusReason = string.Empty;
+
+    private readonly EmployeeContract _newTerms = new();
+    private DateTime _supersedeFrom = DateTime.Today;
+    private DateTime? _newTermsEnd;
+    private string _supersedeReason = string.Empty;
+
+    private string _earningTypeId = string.Empty;
+    private decimal _earningAmount;
+    private DateTime _earningFrom = DateTime.Today;
+    private DateTime? _earningTo;
+
+    private string _deductionTypeId = string.Empty;
+    private decimal _deductionAmount;
+    private DateTime _deductionFrom = DateTime.Today;
+    private DateTime? _deductionTo;
+
+    private string _taxNumber = string.Empty;
+    private string _nssaNumber = string.Empty;
+    private string _necNumber = string.Empty;
+    private bool _payeExempt;
+    private bool _elderlyCredit;
+    private bool _disabledCredit;
+    private bool _blindCredit;
+    private bool _necMember;
+
+    private PaymentMethod _accountMethod = PaymentMethod.BankTransfer;
+    private string _accountCurrency = string.Empty;
+    private string _accountName = string.Empty;
+    private string _accountBank = string.Empty;
+    private string _accountBranch = string.Empty;
+    private string _accountNumber = string.Empty;
+    private string _accountProvider = string.Empty;
+    private string _accountMobile = string.Empty;
+
     protected override async Task OnParametersSetAsync()
     {
         _employee = await Db.Employees.AsNoTracking()
@@ -479,8 +805,46 @@ else
 
         _statutory = await Db.EmployeeStatutoryProfiles.AsNoTracking()
             .FirstOrDefaultAsync(p => p.EmployeeId == EmployeeId);
+
+        // The forms start from what is recorded, so editing is a correction rather than a retype.
+        _taxNumber = _statutory?.TaxNumber ?? string.Empty;
+        _nssaNumber = _statutory?.NssaNumber ?? string.Empty;
+        _necNumber = _statutory?.NecMembershipNumber ?? string.Empty;
+        _payeExempt = _statutory?.IsPayeExempt ?? false;
+        _elderlyCredit = _statutory?.IsElderlyCreditEligible ?? false;
+        _disabledCredit = _statutory?.IsDisabledCreditEligible ?? false;
+        _blindCredit = _statutory?.IsBlindCreditEligible ?? false;
+        _necMember = _statutory?.IsNecMember ?? false;
+
+        _currencies = await Db.Currencies.AsNoTracking()
+            .Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync();
+        _earningTypes = await Db.EarningTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _employee.CompanyId && t.IsActive && t.Code != "BASIC")
+            .OrderBy(t => t.Name).ToListAsync();
+        _deductionTypes = await Db.DeductionTypes.AsNoTracking()
+            .Where(t => t.CompanyId == _employee.CompanyId && t.IsActive)
+            .OrderBy(t => t.Name).ToListAsync();
         _contractHistory = await Contracts.GetHistoryAsync(EmployeeId);
         _currentContract = _contractHistory.FirstOrDefault(c => c.IsCurrent);
+
+        // A new contract version starts from the terms in force, and an account from the currency
+        // the employee is actually paid in: both are corrections far more often than rewrites.
+        if (_currentContract is not null && string.IsNullOrEmpty(_newTerms.PayrollCurrency))
+        {
+            _newTerms.PayrollCurrency = _currentContract.PayrollCurrency;
+            _newTerms.PaymentFrequency = _currentContract.PaymentFrequency;
+            _newTerms.EarningsBasis = _currentContract.EarningsBasis;
+            _newTerms.MonthlyRate = _currentContract.MonthlyRate;
+            _newTerms.DailyRate = _currentContract.DailyRate;
+            _newTerms.HourlyRate = _currentContract.HourlyRate;
+        }
+
+        if (string.IsNullOrEmpty(_accountCurrency))
+        {
+            _accountCurrency = _currentContract?.PayrollCurrency
+                               ?? _currencies.FirstOrDefault()?.Code
+                               ?? string.Empty;
+        }
         _statusHistory = await Db.EmployeeStatusHistory.AsNoTracking()
             .Where(h => h.EmployeeId == EmployeeId)
             .OrderByDescending(h => h.EffectiveDate).ToListAsync();
@@ -577,4 +941,278 @@ else
     private static string Show(DateOnly? value) => value?.ToString("dd MMM yyyy") ?? "—";
 
     private static string YesNo(bool? value) => value is null ? "—" : value.Value ? "Yes" : "No";
+
+    private static string CurrencyLabel(string? code) =>
+        code is null ? "the contract currency" : code == "ZWG" ? "ZiG" : code;
+
+    /// <summary>
+    /// The edit form works on the tracked entity, because that is what the service saves. Cancel
+    /// throws the tracked changes away rather than writing them.
+    /// </summary>
+    private async Task StartEditAsync()
+    {
+        _validation = null;
+        Db.ChangeTracker.Clear();
+        _editing = await Db.Employees.FirstOrDefaultAsync(e => e.Id == EmployeeId);
+        _editDateOfBirth = _editing?.DateOfBirth?.ToDateTime(TimeOnly.MinValue);
+    }
+
+    private void CancelEdit()
+    {
+        _editing = null;
+        _validation = null;
+        Db.ChangeTracker.Clear();
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        _busy = true;
+        try
+        {
+            _editing!.DateOfBirth = _editDateOfBirth is { } dob
+                ? DateOnly.FromDateTime(dob)
+                : null;
+
+            var result = await Employees.UpdateAsync(_editing);
+            if (!result.IsValid)
+            {
+                _validation = result;
+                return;
+            }
+
+            _editing = null;
+            _validation = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ChangeStatusAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Employees.ChangeStatusAsync(
+                EmployeeId, _newStatus, DateOnly.FromDateTime(_statusDate), _statusReason);
+
+            if (!result.IsValid)
+            {
+                _validation = result;
+                return;
+            }
+
+            _validation = null;
+            _statusReason = string.Empty;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SupersedeAsync()
+    {
+        _busy = true;
+        try
+        {
+            _newTerms.CompanyId = _employee!.CompanyId;
+            _newTerms.EmployeeId = EmployeeId;
+            _newTerms.EmploymentTypeId = _currentContract!.EmploymentTypeId;
+            _newTerms.JobTitleId = _currentContract.JobTitleId;
+            _newTerms.DepartmentId = _currentContract.DepartmentId;
+            _newTerms.LocationId = _currentContract.LocationId;
+            _newTerms.ProjectId = _currentContract.ProjectId;
+            _newTerms.StandardHoursPerDay = _currentContract.StandardHoursPerDay;
+            _newTerms.StandardDaysPerWeek = _currentContract.StandardDaysPerWeek;
+            _newTerms.EndDate = _newTermsEnd is { } end ? DateOnly.FromDateTime(end) : null;
+
+            var result = await Contracts.SupersedeAsync(
+                EmployeeId, _newTerms, DateOnly.FromDateTime(_supersedeFrom), _supersedeReason);
+
+            if (!result.Succeeded)
+            {
+                _validation = result.Validation;
+                return;
+            }
+
+            _validation = null;
+            _supersedeReason = string.Empty;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddEarningAsync()
+    {
+        _busy = true;
+        try
+        {
+            var validation = ValidationResult.Success();
+            validation.AddIf(!Guid.TryParse(_earningTypeId, out var typeId), "Earning",
+                "Choose the kind of earning.");
+            validation.AddIf(_earningAmount <= 0m, "Amount", "An amount is required.");
+
+            if (!validation.IsValid)
+            {
+                _validation = validation;
+                return;
+            }
+
+            Db.EmployeeRecurringEarnings.Add(new EmployeeRecurringEarning
+            {
+                EmployeeId = EmployeeId,
+                EarningTypeId = typeId,
+                Amount = _earningAmount,
+                CurrencyCode = _currentContract?.PayrollCurrency ?? _accountCurrency,
+                EffectiveFrom = DateOnly.FromDateTime(_earningFrom),
+                EffectiveTo = _earningTo is { } to ? DateOnly.FromDateTime(to) : null,
+                IsActive = true
+            });
+
+            await Db.SaveChangesAsync();
+
+            _validation = null;
+            _earningTypeId = string.Empty;
+            _earningAmount = 0m;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddDeductionAsync()
+    {
+        _busy = true;
+        try
+        {
+            var validation = ValidationResult.Success();
+            validation.AddIf(!Guid.TryParse(_deductionTypeId, out var typeId), "Deduction",
+                "Choose the kind of deduction.");
+            validation.AddIf(_deductionAmount <= 0m, "Amount", "An amount is required.");
+
+            if (!validation.IsValid)
+            {
+                _validation = validation;
+                return;
+            }
+
+            Db.EmployeeRecurringDeductions.Add(new EmployeeRecurringDeduction
+            {
+                EmployeeId = EmployeeId,
+                DeductionTypeId = typeId,
+                Amount = _deductionAmount,
+                CurrencyCode = _currentContract?.PayrollCurrency ?? _accountCurrency,
+                EffectiveFrom = DateOnly.FromDateTime(_deductionFrom),
+                EffectiveTo = _deductionTo is { } to ? DateOnly.FromDateTime(to) : null,
+                IsActive = true
+            });
+
+            await Db.SaveChangesAsync();
+
+            _validation = null;
+            _deductionTypeId = string.Empty;
+            _deductionAmount = 0m;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveStatutoryAsync()
+    {
+        _busy = true;
+        try
+        {
+            Db.ChangeTracker.Clear();
+
+            var profile = await Db.EmployeeStatutoryProfiles
+                .FirstOrDefaultAsync(p => p.EmployeeId == EmployeeId);
+
+            if (profile is null)
+            {
+                profile = new EmployeeStatutoryProfile { EmployeeId = EmployeeId };
+                Db.EmployeeStatutoryProfiles.Add(profile);
+            }
+
+            profile.TaxNumber = Trimmed(_taxNumber);
+            profile.NssaNumber = Trimmed(_nssaNumber);
+            profile.NecMembershipNumber = Trimmed(_necNumber);
+            profile.IsPayeExempt = _payeExempt;
+            profile.IsElderlyCreditEligible = _elderlyCredit;
+            profile.IsDisabledCreditEligible = _disabledCredit;
+            profile.IsBlindCreditEligible = _blindCredit;
+            profile.IsNecMember = _necMember;
+
+            await Db.SaveChangesAsync();
+
+            _validation = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddAccountAsync()
+    {
+        _busy = true;
+        try
+        {
+            var account = new EmployeePaymentAccount
+            {
+                EmployeeId = EmployeeId,
+                PaymentMethod = _accountMethod,
+                CurrencyCode = _accountCurrency,
+                AccountName = Trimmed(_accountName),
+                BankName = Trimmed(_accountBank),
+                BranchName = Trimmed(_accountBranch),
+                AccountNumber = Trimmed(_accountNumber),
+                MobileMoneyProvider = Trimmed(_accountProvider),
+                MobileMoneyNumber = Trimmed(_accountMobile),
+                AllocationType = AllocationType.FullBalance,
+                IsPrimary = _accounts.Count == 0,
+                IsActive = true
+            };
+
+            var validation = EmployeeValidation.ValidatePaymentAccount(account);
+            if (!validation.IsValid)
+            {
+                _validation = validation;
+                return;
+            }
+
+            Db.EmployeePaymentAccounts.Add(account);
+            await Db.SaveChangesAsync();
+
+            _validation = null;
+            _accountName = _accountBank = _accountBranch = string.Empty;
+            _accountNumber = _accountProvider = _accountMobile = string.Empty;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string? Trimmed(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private Task ReloadAsync()
+    {
+        Db.ChangeTracker.Clear();
+        return OnParametersSetAsync();
+    }
 }
