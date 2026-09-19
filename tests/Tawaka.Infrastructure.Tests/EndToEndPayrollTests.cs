@@ -451,8 +451,15 @@ public class EndToEndPayrollTests : EmployeeTestBase
                 PayrollRunStatus.Locked,
                 (await reopened.PayrollRuns.AsNoTracking().SingleAsync(r => r.Id == run.Id)).Status);
 
-            // The audit survived with it.
-            Assert.Equal(audit.Count, await reopened.AuditLogs.CountAsync());
+            // The audit survived with it — every entry up to the moment of the backup, plus the
+            // one the restore itself wrote to say the history had been recovered. The employee
+            // added after the backup, and the entry recording the backup, are both correctly
+            // absent: neither existed when the copy was taken.
+            var restoredAudit = await reopened.AuditLogs.AsNoTracking().ToListAsync();
+
+            Assert.Equal(audit.Count + 1, restoredAudit.Count);
+            Assert.Single(restoredAudit, e => e.EntityName == "Restore");
+            Assert.DoesNotContain(restoredAudit, e => e.EntityName == "Backup");
         }
         finally
         {
