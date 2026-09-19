@@ -56,6 +56,7 @@ public static class DependencyInjection
 
         services.AddScoped<IStatutoryRuleSource, EfStatutoryRuleSource>();
         services.AddScoped<IStatutoryRuleResolver, StatutoryRuleResolver>();
+        services.AddScoped<StatutoryRuleVerificationService>();
         services.AddScoped<LivePayrollGate>();
 
         services.AddScoped<AuthenticationService>();

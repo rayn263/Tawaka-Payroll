@@ -2,6 +2,7 @@
 @inject PayrollDbContext Db
 @inject LivePayrollGate Gate
 @inject UserSession Session
+@inject StatutoryRuleVerificationService Verification
 
 <h1>Statutory rules</h1>
 <p class="muted">
@@ -52,7 +53,7 @@ else
         <thead>
         <tr>
             <th>Rule ID</th><th>Name</th><th>Currency</th><th>Effective from</th>
-            <th>Effective to</th><th>Status</th><th>Source</th>
+            <th>Effective to</th><th>Status</th><th>Source</th><th></th>
         </tr>
         </thead>
         <tbody>
@@ -75,7 +76,37 @@ else
                 <td>@rule.EffectiveFrom.ToString("dd MMM yyyy")</td>
                 <td>@(rule.EffectiveTo?.ToString("dd MMM yyyy") ?? "open")</td>
                 <td><StatusBadge Verification="rule.VerificationStatus" /></td>
-                <td class="muted small">@rule.Source?.Source</td>
+                <td class="muted small">
+                    @rule.Source?.Source
+                    @if (rule.Source?.VerifiedBy is { } verifier)
+                    {
+                        <div>
+                            verified by @verifier
+                            @if (rule.Source.VerifiedAt is { } at)
+                            {
+                                <text> on @at.ToString("dd MMM yyyy")</text>
+                            }
+                        </div>
+                    }
+                </td>
+                <td>
+                    @if (Session.HasPermission(Permissions.StatutoryVerifyRules) &&
+                         rule.VerificationStatus != VerificationStatus.Disabled)
+                    {
+                        @if (rule.VerificationStatus == VerificationStatus.Verified)
+                        {
+                            <button class="btn btn-quiet" @onclick="() => Open(rule, withdraw: true)">
+                                Withdraw
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-secondary" @onclick="() => Open(rule, withdraw: false)">
+                                Verify
+                            </button>
+                        }
+                    }
+                </td>
             </tr>
         }
         </tbody>
@@ -91,14 +122,152 @@ else
     </p>
 }
 
+@if (_working is not null)
+{
+    <div class="card">
+        <div class="page-header">
+            <h2>@(_withdrawing ? "Withdraw verification" : "Verify") — @_working.Name</h2>
+            <button class="btn btn-quiet" @onclick="Close">Cancel</button>
+        </div>
+
+        <ValidationSummaryPanel Result="_validation" />
+
+        @if (_withdrawing)
+        {
+            <p class="muted">
+                Payrolls may already have been run on this rule. Those results do not change — they
+                were calculated on what was believed at the time — but no new live payroll will use
+                this rule until it is verified again.
+            </p>
+            <div class="form-grid">
+                <div><label>Reason *</label><input @bind="_reason" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="WithdrawAsync" disabled="@_busy">
+                    Withdraw verification
+                </button>
+            </div>
+        }
+        else
+        {
+            <p class="muted">
+                Record what you read. Not the search result that mentioned it — the publication
+                itself.
+            </p>
+            <div class="form-grid">
+                <div>
+                    <label>Document *</label>
+                    <input @bind="_source" placeholder="ZIMRA PAYE tables 2026" />
+                </div>
+                <div>
+                    <label>Where in it</label>
+                    <input @bind="_reference" placeholder="Monthly USD table, page 2" />
+                </div>
+                <div>
+                    <label>Date of the document</label>
+                    <input type="date" @bind="_sourceDate" />
+                </div>
+                <div><label>Notes</label><input @bind="_notes" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="VerifyAsync" disabled="@_busy">
+                    Mark verified
+                </button>
+            </div>
+        }
+    </div>
+}
+
 @code {
     private List<StatutoryRule> _rules = new();
     private Dictionary<VerificationStatus, int> _counts = new();
     private LivePayrollBlockReport? _report;
 
-    protected override void OnInitialized()
+    private StatutoryRule? _working;
+    private bool _withdrawing;
+    private string _source = string.Empty;
+    private string _reference = string.Empty;
+    private DateTime? _sourceDate;
+    private string _notes = string.Empty;
+    private string _reason = string.Empty;
+    private ValidationResult? _validation;
+    private bool _busy;
+
+    private void Open(StatutoryRule rule, bool withdraw)
     {
-        _rules = Db.StatutoryRules.AsNoTracking().OrderBy(r => r.RuleId).ToList();
+        _working = rule;
+        _withdrawing = withdraw;
+        _validation = null;
+        _source = rule.Source?.Source ?? string.Empty;
+        _reference = rule.Source?.SourceReference ?? string.Empty;
+        _sourceDate = rule.Source?.SourceDate?.ToDateTime(TimeOnly.MinValue);
+        _notes = string.Empty;
+        _reason = string.Empty;
+    }
+
+    private void Close()
+    {
+        _working = null;
+        _validation = null;
+    }
+
+    private async Task VerifyAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Verification.VerifyAsync(_working!.Id, new RuleVerification
+            {
+                Source = _source,
+                Reference = _reference,
+                SourceDate = _sourceDate is { } date ? DateOnly.FromDateTime(date) : null,
+                Notes = _notes
+            });
+
+            if (!result.IsValid)
+            {
+                _validation = result;
+                return;
+            }
+
+            Close();
+            Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task WithdrawAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Verification.WithdrawAsync(_working!.Id, _reason);
+
+            if (!result.IsValid)
+            {
+                _validation = result;
+                return;
+            }
+
+            Close();
+            Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    protected override void OnInitialized() => Reload();
+
+    private void Reload()
+    {
+        Db.ChangeTracker.Clear();
+        _rules = Db.StatutoryRules.AsNoTracking().Include(r => r.Source)
+            .OrderBy(r => r.RuleId).ToList();
         _counts = _rules.GroupBy(r => r.VerificationStatus)
             .ToDictionary(g => g.Key, g => g.Count());
 
