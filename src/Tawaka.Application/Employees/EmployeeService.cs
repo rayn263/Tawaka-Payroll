@@ -282,13 +282,4 @@ public sealed class EmployeeService
         return validation;
     }
 
-    public Task<Employee?> GetAsync(Guid employeeId, CancellationToken cancellationToken = default)
-    {
-        _currentUser.Require(Permissions.EmployeesView);
-
-        return _context.Employees
-            .Include(e => e.StatutoryProfile)
-            .Include(e => e.PaymentAccounts)
-            .FirstOrDefaultAsync(e => e.Id == employeeId, cancellationToken);
-    }
 }

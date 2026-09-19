@@ -256,17 +256,6 @@ public sealed class StatutoryObligationService
             .ToListAsync(cancellationToken);
     }
 
-    public Task<List<StatutoryObligation>> GetOutstandingAsync(
-        Guid companyId, CancellationToken cancellationToken = default)
-    {
-        _currentUser.Require(Permissions.StatutoryView);
-
-        return _context.StatutoryObligations.AsNoTracking()
-            .Include(o => o.Payments)
-            .Where(o => o.CompanyId == companyId)
-            .ToListAsync(cancellationToken)
-            .ContinueWith(t => t.Result.Where(o => !o.IsPaid).ToList(), cancellationToken);
-    }
 
     // ---- Construction ------------------------------------------------------------------------
 

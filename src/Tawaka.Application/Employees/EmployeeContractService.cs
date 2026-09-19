@@ -199,12 +199,6 @@ public sealed class EmployeeContractService
             .ToListAsync(cancellationToken);
     }
 
-    public Task<EmployeeContract?> GetCurrentAsync(
-        Guid employeeId, CancellationToken cancellationToken = default) =>
-        _context.EmployeeContracts
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.EmployeeId == employeeId && c.IsCurrent, cancellationToken);
-
     private async Task ValidateReferencesAsync(
         EmployeeContract contract, ValidationResult validation, CancellationToken cancellationToken)
     {

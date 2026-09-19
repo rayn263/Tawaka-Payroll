@@ -208,11 +208,4 @@ public sealed class HolidayCalendarService
             .ToListAsync(cancellationToken);
     }
 
-    public Task<HolidayCalendar?> GetDefaultAsync(
-        Guid companyId, DateOnly on, CancellationToken cancellationToken = default) =>
-        _context.HolidayCalendars.AsNoTracking()
-            .Include(c => c.Holidays)
-            .Where(c => c.CompanyId == companyId && c.IsActive && c.IsDefault &&
-                        c.EffectiveFrom <= on && (c.EffectiveTo == null || c.EffectiveTo >= on))
-            .FirstOrDefaultAsync(cancellationToken);
 }
