@@ -158,9 +158,18 @@ public sealed class JournalExportService
             .Where(l => l.Code is not ("LOAN" or "ADVANCE" or "UNPAID_LEAVE"))
             .Sum(l => l.Amount);
 
-        // Unpaid leave is not a deduction to anybody: the employee simply earned less, and gross
-        // already reflects it. Posting it would double-count.
+        // Unpaid leave is owed to nobody — not the employee, not a third party, not the employer's
+        // own balance sheet. The engine records it as a deduction from gross rather than a smaller
+        // gross, so the journal credits it back against the wages expense: the expense ends up at
+        // what the employer actually bears. Leaving it out altogether, as this once did, left the
+        // journal out of balance by exactly the amount of the leave.
+        var unpaidLeave = otherDeductions
+            .Where(l => l.Code == "UNPAID_LEAVE")
+            .Sum(l => l.Amount);
+
         Post(GlMappingType.WagesExpense, gross, $"Gross wages — {periodName}", debit: true);
+        Post(GlMappingType.WagesExpense, unpaidLeave, $"Unpaid leave not earned — {periodName}",
+            debit: false);
         Post(GlMappingType.PayeLiability, paye, $"PAYE withheld — {periodName}", debit: false);
         Post(GlMappingType.AidsLevyLiability, aids, $"AIDS Levy withheld — {periodName}", debit: false);
         Post(GlMappingType.NssaEmployeeLiability, nssaEmployee,

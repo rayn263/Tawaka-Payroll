@@ -13,6 +13,9 @@ using Tawaka.Domain.Employees;
 using Tawaka.Domain.Loans;
 using Tawaka.Domain.Organisation;
 using Tawaka.Domain.Payroll;
+using Tawaka.Domain.Security;
+using Tawaka.Domain.Time;
+using Tawaka.Infrastructure.Persistence;
 using Tawaka.Domain.Statutory;
 using Tawaka.Domain.Statutory.Obligations;
 using Tawaka.Infrastructure.Interceptors;
@@ -36,12 +39,52 @@ namespace Tawaka.Infrastructure.Tests;
 public class EndToEndPayrollTests : EmployeeTestBase
 {
     private sealed record Actors(
-        PayrollServices Officer, PayrollServices Manager, PayrollServices Administrator);
+        PayrollServices Officer, PayrollServices Manager, PayrollServices Administrator,
+        string OfficerId = "u-officer", string ManagerId = "u-manager");
 
     private static Actors Build(TestDatabase db) => new(
         PayrollServices.For(db, new TestUser("u-officer", "Tapiwa Ncube")),
         PayrollServices.For(db, new TestUser("u-manager", "Rudo Moyo")),
         PayrollServices.For(db, new TestUser("u-admin", "Anesu Chirwa")));
+
+    /// <summary>
+    /// The officer and the manager, created through the application the way a business creates
+    /// them, so the journey below is driven by accounts that actually exist rather than by test
+    /// identities. Approval turns on who somebody is, so this is not a detail.
+    /// </summary>
+    private static async Task<Actors> BuildFromCreatedUsersAsync(TestDatabase db)
+    {
+        var administration = new Tawaka.Application.Security.UserAdministrationService(
+            db.Context, db.User, db.Hasher,
+            new Tawaka.Application.Security.RoleService(db.Context, db.User), db.Clock);
+
+        async Task<(PayrollServices Services, string UserId)> CreateAsync(
+            string username, string fullName, string roleName)
+        {
+            var role = await db.Context.Roles.AsNoTracking()
+                .SingleAsync(r => r.Name == roleName);
+
+            var created = await administration.CreateAsync(
+                new Tawaka.Application.Security.CreateUserCommand
+                {
+                    Username = username,
+                    FullName = fullName,
+                    RoleIds = new[] { role.Id }
+                });
+
+            Assert.True(created.Succeeded, created.Validation.ToString());
+            db.Context.ChangeTracker.Clear();
+
+            var userId = created.Value!.UserId.ToString();
+            return (PayrollServices.For(db, new TestUser(userId, fullName)), userId);
+        }
+
+        var (officer, officerId) = await CreateAsync("t.ncube", "Tapiwa Ncube", RoleNames.PayrollOfficer);
+        var (manager, managerId) = await CreateAsync("r.moyo", "Rudo Moyo", RoleNames.Manager);
+        var (administrator, _) = await CreateAsync("a.chirwa", "Anesu Chirwa", RoleNames.Administrator);
+
+        return new Actors(officer, manager, administrator, officerId, managerId);
+    }
 
     [Theory]
     [InlineData("USD", "850")]
@@ -56,7 +99,10 @@ public class EndToEndPayrollTests : EmployeeTestBase
         await ConfigureCompanyAsync(db, companyId);
         await VerifyEverythingAsync(db);
 
-        var actors = Build(db);
+        // ---- The people who will run it -------------------------------------------------------
+        var actors = await BuildFromCreatedUsersAsync(db);
+        var officerId = actors.OfficerId;
+        var managerId = actors.ManagerId;
 
         // ---- Employee, contract, recurring earning -----------------------------------------
         var employees = new EmployeeService(db.Context, db.User, db.Clock);
@@ -266,6 +312,25 @@ public class EndToEndPayrollTests : EmployeeTestBase
         Assert.Contains(reports.StatutoryPayments.SelectMany(p => p.Rows),
             p => p.PaymentReference == "FBC-RTGS-90114");
 
+        // ---- Accounting journal ------------------------------------------------------------------
+        foreach (var type in Enum.GetValues<Tawaka.Domain.Accounting.GlMappingType>())
+        {
+            var mapping = await actors.Administrator.Journals.SetMappingAsync(
+                companyId, type, currency, $"{(int)type + 2000}", type.ToString(), null);
+            Assert.True(mapping.IsValid, mapping.ToString());
+        }
+
+        db.Context.ChangeTracker.Clear();
+        var journals = await actors.Officer.Journals.BuildAsync(run.Id);
+
+        // One journal, for the one currency this payroll is in, and it balances on its own.
+        var journal = Assert.Single(journals);
+        Assert.Equal(currency, journal.CurrencyCode);
+        Assert.True(journal.IsBalanced,
+            $"Journal out by {journal.TotalDebits - journal.TotalCredits} {currency}.");
+        Assert.True(journal.TotalDebits > 0m);
+        Assert.Empty(journal.Unmapped);
+
         // ---- Lock, then prove it is locked ---------------------------------------------------
         db.Context.ChangeTracker.Clear();
         Assert.True((await actors.Administrator.Runs.LockAsync(run.Id)).IsValid);
@@ -302,6 +367,100 @@ public class EndToEndPayrollTests : EmployeeTestBase
             .SingleAsync(o => o.PayrollRunId == run.Id &&
                               o.ObligationType == StatutoryObligationType.AidsLevy);
         Assert.True((await actors.Officer.Obligations.ApproveAsync(aids.Id)).IsValid);
+
+        // ---- Audit: every stage left a record, and every record names somebody -----------------
+        db.Context.ChangeTracker.Clear();
+        var audit = await db.Context.AuditLogs.AsNoTracking().ToListAsync();
+
+        Assert.NotEmpty(audit);
+        Assert.All(audit, entry =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.UserId));
+            Assert.NotEqual(default, entry.OccurredAt);
+            Assert.False(string.IsNullOrWhiteSpace(entry.EntityName));
+        });
+
+        foreach (var recorded in new[]
+                 {
+                     nameof(Employee), nameof(EmployeeContract), nameof(PayrollRun),
+                     nameof(Timesheet), nameof(EmployeeLoan), nameof(StatutoryObligation),
+                     nameof(StatutoryPayment)
+                 })
+        {
+            Assert.Contains(audit, entry => entry.EntityName == recorded);
+        }
+
+        Assert.Contains(audit, a => a.EntityName == nameof(PayrollRun));
+
+        // And the run itself names who did each thing — the two accounts created at the start,
+        // not "SYSTEM" and not the same person twice.
+        db.Context.ChangeTracker.Clear();
+        var attributed = await db.Context.PayrollRuns.AsNoTracking().SingleAsync(r => r.Id == run.Id);
+
+        Assert.Equal(officerId, attributed.CalculatedBy);
+        Assert.Equal(managerId, attributed.ApprovedBy);
+        Assert.Equal(officerId, attributed.FinalisedBy);
+        Assert.NotNull(attributed.LockedBy);
+        Assert.NotEqual(attributed.CalculatedBy, attributed.ApprovedBy);
+
+        Assert.NotNull(attributed.CalculatedAt);
+        Assert.NotNull(attributed.ApprovedAt);
+        Assert.NotNull(attributed.FinalisedAt);
+        Assert.NotNull(attributed.PaidAt);
+        Assert.NotNull(attributed.LockedAt);
+
+        // ---- Backup, change something, restore, and check the payroll came back unchanged -------
+        var backupRoot = Path.Combine(
+            Path.GetTempPath(), $"tawaka-journey-backup-{Guid.NewGuid():N}");
+        var backups = new Tawaka.Infrastructure.Administration.BackupService(
+            db.Context, db.User, db.Clock);
+        var databasePath = backups.DatabasePath()!;
+
+        try
+        {
+            var backup = await backups.BackupAsync(backupRoot, $"After the {currency} payroll");
+            Assert.True(backup.Succeeded, backup.Validation.ToString());
+
+            // Something changes after the backup.
+            db.Context.ChangeTracker.Clear();
+            var afterBackup = NewEmployee(companyId, "EMP-AFTER-BACKUP");
+            afterBackup.NationalId = "63-9090909 Z 90";
+            db.Context.Employees.Add(afterBackup);
+            await db.Context.SaveChangesAsync();
+
+            var restore = await backups.RestoreAsync(backup.Value!.BackupPath, confirmed: true);
+            Assert.True(restore.Succeeded, restore.Validation.ToString());
+
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            await using var reopened = new PayrollDbContext(
+                new DbContextOptionsBuilder<PayrollDbContext>()
+                    .UseSqlite($"Data Source={databasePath}").Options);
+
+            Assert.Empty(await reopened.Database.GetPendingMigrationsAsync());
+            Assert.DoesNotContain(
+                await reopened.Employees.AsNoTracking().Select(e => e.EmployeeNumber).ToListAsync(),
+                number => number == "EMP-AFTER-BACKUP");
+
+            var restoredResult = await reopened.PayrollRunEmployees.AsNoTracking()
+                .SingleAsync(e => e.PayrollRunId == run.Id);
+
+            Assert.Equal(runEmployee.GrossEarningsAmount, restoredResult.GrossEarningsAmount);
+            Assert.Equal(runEmployee.NetPayAmount, restoredResult.NetPayAmount);
+            Assert.Equal(runEmployee.PayeAfterCreditsAmount, restoredResult.PayeAfterCreditsAmount);
+            Assert.Equal(
+                PayrollRunStatus.Locked,
+                (await reopened.PayrollRuns.AsNoTracking().SingleAsync(r => r.Id == run.Id)).Status);
+
+            // The audit survived with it.
+            Assert.Equal(audit.Count, await reopened.AuditLogs.CountAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(backupRoot))
+            {
+                Directory.Delete(backupRoot, recursive: true);
+            }
+        }
     }
 
     /// <summary>
