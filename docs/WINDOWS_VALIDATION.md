@@ -24,8 +24,15 @@ $ ls /usr/lib/dotnet/sdk/8.0.131/Sdks/ | grep -i windows
 ```
 
 Every other project in `Tawaka.Payroll.sln` builds in Release with zero warnings; the single error
-is this one. Cross-compiling is not a way round it — `dotnet publish -r win-x64` fails at the same
-import, because the targets file is missing rather than the runtime.
+is this one.
+
+Three separate ways round it were tried, and all three are closed:
+
+| Attempt | Result |
+|---|---|
+| `dotnet publish -r win-x64 --self-contained` | Same `MSB4019`. The missing piece is the targets file, not the runtime |
+| `-p:EnableWindowsTargeting=true` | Same `MSB4019`. That switch supplies *targeting packs* from NuGet; it cannot supply an SDK folder the installation does not have |
+| Fetching the Windows SDK to borrow its `Microsoft.NET.Sdk.WindowsDesktop` folder | `builds.dotnet.microsoft.com` is blocked by this environment's proxy (`403` at CONNECT). NuGet carries `Microsoft.NET.Sdk.WindowsDesktop` only at 3.0.0, from the .NET Core 3.0 era, which cannot be grafted onto an 8.0.131 SDK |
 
 **What this means:** the WPF host, the `BlazorWebView`, the WebView2 control, the startup sequence
 and the printing path have never executed. They are compiled nowhere and run nowhere.
@@ -42,6 +49,13 @@ So that the list below is a list of the genuinely unknown, not of everything:
   and not Windows.
 - The database, migrations, seeding, calculation, reporting, payslips, obligations, backup and
   restore all run on Linux, and are the same code on Windows.
+- The host's own wiring is checked against its files by `WindowsHostConfigurationTests`, because a
+  project that cannot be compiled cannot be checked by a compiler: the solution parses and carries
+  the desktop project with valid configuration rows; the project targets `net8.0-windows` with WPF
+  and references everything it hosts; `App.xaml` has no `StartupUri`, and startup assigns
+  `App.Services`, migrates and seeds **before** the window is created; the root component selector
+  matches an element on the host page; the host page loads the framework script and a stylesheet
+  that exists; and the publish profile is self-contained win-x64 and untrimmed.
 
 The gap is exactly: **the host process, the browser control it embeds, the operating system around
 them, and printing.**
@@ -62,7 +76,7 @@ of `%LOCALAPPDATA%\Tawaka Payroll\logs\`.
 | A2 | `dotnet restore Tawaka.Payroll.sln` | Restores, including `Microsoft.AspNetCore.Components.WebView.Wpf`. **This package version has never been restored on Windows**; if it fails, take the current 8.0.x from nuget.org and update `src/Tawaka.Ui.Desktop/Tawaka.Ui.Desktop.csproj` |
 | A3 | `dotnet build Tawaka.Payroll.sln -c Release` | Build succeeded, 0 errors. Record any warnings |
 | A4 | `dotnet test Tawaka.Payroll.sln -c Release` | All tests pass on Windows as they do on Linux |
-| A5 | `dotnet publish src/Tawaka.Ui.Desktop -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` | One `Tawaka.Payroll.exe` under `bin\Release\net8.0-windows\win-x64\publish\` |
+| A5 | `dotnet publish src/Tawaka.Ui.Desktop -c Release -p:PublishProfile=win-x64` | One `Tawaka.Payroll.exe` under `src\Tawaka.Ui.Desktop\bin\Release\publish\win-x64\`. The profile carries the runtime identifier, self-contained, single-file and no-trimming settings |
 | A6 | Copy that exe alone to a **second** machine with no .NET SDK | It runs — proving self-contained really is self-contained |
 
 ### B. Start-up
@@ -149,7 +163,7 @@ reports, obligations, payments, project cost, journal.
 
 | # | Check |
 |---|---|
-| I1 | High-DPI: 100%, 150% and 200% scaling, and a monitor change while running (the manifest requests PerMonitorV2) |
+| I1 | High-DPI: 100%, 150% and 200% scaling, and a monitor change while running. WPF on .NET 8 is per-monitor DPI aware by default through the manifest the Windows Desktop SDK generates; nothing in this project overrides it, and nothing has confirmed it |
 | I2 | Keyboard: Tab order through forms, Enter on the sign-in screen, Escape closing a modal |
 | I3 | Clipboard: copy and paste into fields |
 | I4 | Windows dark mode does not make any text unreadable |
