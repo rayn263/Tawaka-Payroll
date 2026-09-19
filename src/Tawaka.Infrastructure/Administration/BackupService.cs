@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Tawaka.Domain.Audit;
 using Tawaka.Application.Abstractions;
 using Tawaka.Application.Common;
 using Tawaka.Application.Security;
@@ -121,6 +122,11 @@ public sealed class BackupService
             JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }),
             cancellationToken)
             .ConfigureAwait(false);
+
+        await RecordAsync(
+            AuditAction.Export, "Backup", target,
+            $"Backup of {manifest.DatabaseBytes:N0} bytes on schema {manifest.SchemaVersion}",
+            notes, cancellationToken).ConfigureAwait(false);
 
         return OperationResult<BackupResult>.Success(new BackupResult(target, manifest));
     }
@@ -255,7 +261,42 @@ public sealed class BackupService
                 $"The restore failed and the previous database has been put back: {ex.Message}"));
         }
 
+        // Written into the database that is now live, so it survives: an entry made before the
+        // swap would have gone with the database it was replacing. It is the first thing in the
+        // restored history that says the history was replaced.
+        await RecordAsync(
+            AuditAction.Update, "Restore", backupPath,
+            $"Database restored from a backup taken {inspection.Manifest.TakenAt:u} by " +
+            $"{inspection.Manifest.TakenBy} on schema {inspection.Manifest.SchemaVersion}. " +
+            $"The database in use was set aside as {Path.GetFileName(displaced)}.",
+            inspection.Manifest.Notes, cancellationToken).ConfigureAwait(false);
+
         return OperationResult<string>.Success(displaced);
+    }
+
+    /// <summary>
+    /// Backing up and restoring are not entity changes, so the audit interceptor cannot see them.
+    /// They are recorded here instead, because replacing every payroll in the system is the single
+    /// most consequential thing this application can be asked to do.
+    /// </summary>
+    private async Task RecordAsync(
+        AuditAction action, string what, string where, string detail, string? reason,
+        CancellationToken cancellationToken)
+    {
+        _context.AuditLogs.Add(new AuditLog
+        {
+            OccurredAt = _clock.Now,
+            UserId = _currentUser.UserId,
+            UserName = _currentUser.UserName,
+            Action = action,
+            EntityName = what,
+            EntityId = where,
+            NewValue = detail,
+            Reason = reason,
+            Machine = _currentUser.Machine
+        });
+
+        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The database file behind this context, or null where it is not file-backed.</summary>
