@@ -12,15 +12,15 @@
 
 Requires the .NET 8 SDK. On Ubuntu: `apt-get install -y dotnet-sdk-8.0`.
 
-Current result: **652 passing, 1 skipped, 0 failing, 0 warnings**, in Debug and in Release.
+Current result: **695 passing, 1 skipped, 0 failing, 0 warnings**, in Debug and in Release.
 
 ### How that number is counted
 
 | | |
 |---|---|
-| Test methods written | **456** |
-| Cases executed | **653** — a `[Theory]` runs once per `[InlineData]`, and each run is counted here |
-| Passed | 652 |
+| Test methods written | **486**, across 59 classes |
+| Cases executed | **696** — a `[Theory]` runs once per `[InlineData]`, and each run is counted here |
+| Passed | 695 |
 | Skipped | 1 (TC-18, pending Q4a/Q22) |
 | Failed | 0 |
 
@@ -32,11 +32,11 @@ all.
 
 | | Milestone 5 | Final release | Final QA |
 |---|---|---|---|
-| Distinct test methods | 518 | 570 | **456 methods / 653 cases** |
+| Distinct test methods | 518 | 570 | **486 methods / 696 cases** |
 
-The method count falls below the earlier figures because those counted executed cases, as this
-column's second number does. Compared like with like, the suite grew from 570 executed cases to
-653.
+The method count is below the earlier figures because those counted executed cases, as this
+column's second number does. Compared like with like, the suite grew from 570 executed cases at the
+final release, to 653 after QA, to 696 now.
 
 ## The two kinds of test
 

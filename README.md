@@ -22,7 +22,7 @@ A professional, Windows-based payroll management system for businesses operating
 ```bash
 apt-get install -y dotnet-sdk-8.0   # or install the .NET 8 SDK for your platform
 ./build.sh                          # build the cross-platform solution
-./test.sh                           # 652 passing, 1 skipped (pending Q4a/Q22)
+./test.sh                           # 695 passing, 1 skipped (pending Q4a/Q22)
 ./foundation-check.sh               # migrate, seed, print the rule register, run the live gate
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll                  # gate closed: calculation only
 dotnet run --project tools/Tawaka.Foundation.Cli -- --payroll --verify-rules   # simulated verification: inputs, calculation, obligations

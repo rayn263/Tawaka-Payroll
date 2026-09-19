@@ -1,9 +1,9 @@
 # Project State
 
-**Last updated:** 2026-09-17
+**Last updated:** 2026-09-19
 **Current phase:** Release candidate
-**Current milestone:** Final QA, Windows validation and release-candidate audit — **COMPLETE**
-(report: `docs/FINAL_QA_REPORT.md`)
+**Current milestone:** Final release hardening and delivery — **COMPLETE**
+(report: `docs/FINAL_RELEASE_STATUS.md`)
 **Release stage:** COMPLIANCE-UNVERIFIED (live payroll gated and blocked — see below)
 
 This file is the single place to look for where the project actually is. Update it in the same
@@ -146,13 +146,14 @@ these calculates in development mode only.
 |---|---|---|
 | Domain | 29 | 0 |
 | Application | 43 | 0 |
-| Payroll.Engine | 230 | 1 |
-| Infrastructure | 307 | 0 |
-| Ui (headless component rendering) | 43 | 0 |
-| **Total** | **652** | **1** |
+| Payroll.Engine | 234 | 1 |
+| Infrastructure | 311 | 0 |
+| Ui (headless component rendering) | 78 | 0 |
+| **Total** | **695** | **1** |
 
-Written as **456 test methods**; a `[Theory]` runs once per `[InlineData]`, giving 653 executed
-cases. No base class declares tests, so nothing is counted twice.
+Written as **486 test methods** across 59 classes; a `[Theory]` runs once per `[InlineData]`, giving
+696 executed cases. No base class declares tests, so nothing is counted twice. Identical in Debug
+and Release, both with zero warnings.
 
 The final release added the end-to-end journey (both currencies, plus the unverified-rule and
 mixed-currency refusals), the reconciliation suite, structural integrity tests, release-readiness
@@ -269,23 +270,48 @@ working-days and ordinary-hours divisor).
 
 ## 8. Status
 
-**Release candidate.** Feature-complete for its designed scope, audited, and not released.
+**RELEASE CANDIDATE — COMPLIANCE UNVERIFIED.** Feature-complete for its designed scope, and not
+production-ready.
 
-The Final QA milestone froze scope and validated the application rather than extending it. It found
-and fixed two P0 defects — the Windows solution file had never parsed on any platform, and nothing
-in the application could create a second user, which left the approval model unreachable — three P1
-defects, and four P2 defects. `docs/FINAL_QA_REPORT.md` is the full account.
+`docs/FINAL_RELEASE_STATUS.md` is the full account. In brief, across the QA and hardening stages the
+following were found and fixed:
+
+| | |
+|---|---|
+| P0 | The Windows solution file had never parsed on any platform, so no Windows build was ever possible |
+| P0 | Nothing in the application could create a second user, so no payroll could ever be approved |
+| P0 | A statutory rule could not be verified from any screen, so the compliance gate had no key |
+| P0 | The employee profile was entirely read-only: no pay rise, no tax number, no bank account, no leaver |
+| P1 | SQLite cannot order by EF's `DateTimeOffset` mapping; twelve queries did, and every screen failed on first render |
+| P1 | The accounting journal omitted unpaid leave and therefore did not balance |
+| P1 | `PayrollPeriods.Code` was unique database-wide rather than per company |
+| P1 | The dashboard counted every company in the database into one set of figures |
+| P1 | A negative net pay was published rather than refused |
+| P2 | An employee was saved when their contract failed validation, and could then never be completed |
+| P2 | A cross-currency loan instalment was silently never recovered, with no trace anywhere |
+| P2 | Backups and restores left no audit entry |
+| P2 | Three screens defaulted to USD rather than the company's configured currency |
 
 Two things stand between this and a release, and neither is a code change:
 
 1. **Windows validation has not been performed.** It could not be: the Linux SDK has no
-   WindowsDesktop targets, so the WPF host compiles nowhere here. `docs/WINDOWS_VALIDATION.md` is
-   the exact procedure.
+   WindowsDesktop targets, so the WPF host compiles nowhere here — three routes round it were tried
+   and all are closed. `docs/WINDOWS_VALIDATION.md` is the exact procedure.
 2. **No statutory rule is verified**, and none could be verified from this environment — every
-   authoritative Zimbabwean source is blocked at the network layer. `docs/COMPLIANCE_STATUS.md`
-   states each open question and what would answer it.
+   authoritative Zimbabwean source is blocked at the network layer, rechecked six times.
+   `docs/COMPLIANCE_STATUS.md` states each open question and what would answer it. Verification is
+   now possible *in the application*, which it was not before.
 
-No further development milestone is proposed.
+### Known limitations
+
+Recorded rather than hidden; none is P0 or P1. Role permissions cannot be edited from a screen;
+leave entitlement adjustments, loan over-recovery approval and creating a second holiday calendar
+are supported by services that no screen reaches; skipped inputs surface on Reports rather than on
+the payroll preview; one user at a time; no encryption at rest. Full list in
+`docs/FINAL_RELEASE_STATUS.md`.
+
+**No further development milestone is proposed.** The next work is deployment and real-world
+validation.
 
 Live payroll remains blocked: the engine calculates in development mode only until every required
 statutory rule has been confirmed against its authoritative source and a person records the
